@@ -1,12 +1,10 @@
-use crate::common::{
-    err_invalid_input, read_input, read_input_to_end, LegacyParser, Unit, UnitFactory,
-};
+use crate::common::{err_invalid_input, Unit, UnitFactory};
 use crate::parse::*;
 use crate::symbol::{Symbol, Symbols};
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::io::Error;
 use std::io::Write;
-use std::io::{Error, Lines};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Comp {
@@ -375,7 +373,6 @@ impl<'a> Parser<'a, Jump> for JumpParser {
 
 #[derive(Clone)]
 pub enum ASMLine {
-    Blank,
     Comment(String),
     AInstr(Symbol),
     CInstr(Dest, Comp, Jump),
@@ -416,7 +413,6 @@ impl ASMLine {
             ASMLine::CInstr(dest, comp, Jump::Null) => format!("{}={}", dest, comp),
             ASMLine::CInstr(dest, comp, jump) => format!("{}={};{}", dest, comp, jump),
             ASMLine::Comment(text) => format!("//{}", text),
-            ASMLine::Blank => "".to_owned(),
         };
     }
 
@@ -426,16 +422,13 @@ impl ASMLine {
 
     pub fn is_sloc(&self) -> bool {
         match self {
-            &ASMLine::Blank | &ASMLine::Comment(..) => false,
+            &ASMLine::Comment(..) => false,
             _ => true,
         }
     }
 
     pub fn is_blank(&self) -> bool {
-        match self {
-            &ASMLine::Blank => true,
-            _ => false,
-        }
+        false
     }
 
     fn is_label(&self) -> bool {
@@ -654,62 +647,6 @@ impl ASMParsed {
             Ok((_remaining, syntax)) => Ok(syntax),
             Err(source_at) => Err(err_invalid_input(source_at)),
         }
-        // }
-        // src.trim()
-        //     .lines()
-        //     .map(|line| Self::parse_line(line))
-        //     .collect()
-    }
-
-    fn parse_line(line: &str) -> Result<ASMLine, Error> {
-        let (trimmed, comment) = line
-            .split_once("//")
-            .map(|(first, second)| (first.trim(), second.trim()))
-            .unwrap_or((line.trim(), ""));
-        if trimmed.is_empty() {
-            if comment.is_empty() {
-                return Ok(ASMLine::Blank);
-            } else {
-                return Ok(ASMLine::Comment(comment.to_owned()));
-            }
-        } else if trimmed.starts_with("@") {
-            let text = trimmed.strip_prefix("@").unwrap_or("");
-            return Ok(ASMLine::AInstr(text.into()));
-        } else if trimmed.starts_with("(") {
-            if !trimmed.ends_with(")") {
-                return Err(err_invalid_input("Unterminated label"));
-            } else {
-                return Ok(ASMLine::LInstr(
-                    trimmed
-                        .strip_prefix("(")
-                        .unwrap()
-                        .strip_suffix(")")
-                        .unwrap()
-                        .into(),
-                ));
-            }
-        } else {
-            let (dest, rest): (Dest, &str) = trimmed
-                .split_once("=")
-                .map(|(dest, rest)| -> (Dest, &str) { (dest.into(), rest) })
-                .unwrap_or((Dest::Null, trimmed));
-            let (comp, jump): (Comp, Jump) = rest
-                .split_once(";")
-                .map(|(comp, jump)| -> (Comp, Jump) { (comp.into(), jump.into()) })
-                .unwrap_or((rest.into(), Jump::Null));
-            if let Dest::Invalid = dest {
-                return Err(err_invalid_input(format!("Invalid dest: '{}'", trimmed)));
-            } else if let Jump::Invalid = jump {
-                return Err(err_invalid_input("Invalid jump"));
-            } else if let Comp::XXX = comp {
-                return Err(err_invalid_input(format!(
-                    "Invalid comp expression in line: {}",
-                    line
-                )));
-            } else {
-                return Ok(ASMLine::CInstr(dest, comp, jump));
-            }
-        }
     }
 
     fn lines<'a>(&'a self) -> Vec<&'a ASMLine> {
@@ -894,7 +831,11 @@ impl HackAssembler {
 
     pub fn do_unit(path: &str) {
         let unit = ASMUnit::unit_from(path).expect(&format!("failed to read {}", path));
-        let code = unit.parse().expect("expected parsed").into_first_pass().into_second_pass();
+        let code = unit
+            .parse()
+            .expect("expected parsed")
+            .into_first_pass()
+            .into_second_pass();
         writeln!(std::io::stdout(), "{:?}", code).ok();
         let hack = code.to_hack();
         unit.out_unit()

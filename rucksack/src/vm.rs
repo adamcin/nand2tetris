@@ -3,15 +3,14 @@ use std::{
     fs::{self, DirEntry},
     io::Error,
     io::Write,
-    marker, os,
     path::Path,
 };
 
 use crate::{
-    asm::{self, ASMLine, ASMParsed, ASMParser, ASMUnit, Comp, Dest, Jump},
-    common::{err_invalid_input, read_input_to_end, LegacyParser, Unit, UnitFactory},
+    asm::{self, ASMLine, ASMParsed, ASMUnit, Jump},
+    common::{err_invalid_input, Unit, UnitFactory},
     parse::*,
-    symbol::{PredefSymbol, Symbol},
+    symbol::Symbol,
 };
 
 #[derive(Clone)]
@@ -41,12 +40,6 @@ impl VMUnit {
         Self: Sized,
     {
         Self { src_path }
-    }
-
-    fn copy(&self) -> Self {
-        Self {
-            src_path: String::from(&self.src_path),
-        }
     }
 
     fn out_unit(&self) -> ASMUnit {
@@ -91,26 +84,6 @@ impl<'u> VMParsed {
             Err(error_at) => Err(err_invalid_input(format!("parse error at: {}", error_at))),
         }
     }
-
-    // fn parse<'a>(unit: &'a VMUnit) -> Vec<VMLine> {
-    //     return unit
-    //         .lines()
-    //         .iter()
-    //         .map(|line| Self::parse_line(line))
-    //         .filter_map(|line| line.ok())
-    //         .collect();
-    // }
-
-    // fn parse_line(line: &str) -> Result<VMLine, Error> {
-    //     let (trimmed, comment) = line
-    //         .split_once("//")
-    //         .map(|(first, second)| (first.trim(), second.trim()))
-    //         .unwrap_or((line.trim(), ""));
-    //     if trimmed.is_empty() && !comment.is_empty() {
-    //         return Ok(VMLine::Comment(comment.to_owned()));
-    //     }
-    //     VMLine::parse(trimmed)
-    // }
 
     fn static_basename<'a>(&'a self) -> &'a str {
         &self.basename
@@ -737,10 +710,7 @@ const COMMENT_ALL_LINES: bool = true;
 impl Display for CodeWriter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for line in self.lines() {
-            match line {
-                &ASMLine::Blank => {}
-                _ => writeln!(f, "{}", line)?,
-            }
+            writeln!(f, "{}", line)?
         }
         Ok(())
     }
@@ -1080,11 +1050,6 @@ impl VMUnitType {
     }
 }
 
-pub enum VMParserType {
-    File(VMParser),
-    Dir(DirParser),
-}
-
 pub struct VMUnitFactory {}
 
 impl VMUnitFactory {
@@ -1145,22 +1110,12 @@ impl Unit for DirUnit {
 }
 
 impl DirUnit {
-    fn copy(&self) -> Self {
-        Self {
-            src_path: String::from(&self.src_path),
-            out_path: String::from(&self.out_path),
-        }
-    }
-
     fn out_unit(&self) -> ASMUnit {
         ASMUnit::new(self.out_path.as_str().to_owned())
     }
 }
 
-pub struct DirParser {
-    unit: DirUnit,
-    code: Bootstrapper,
-}
+pub struct DirParser {}
 
 impl DirParser {
     fn parse_all(unit: &DirUnit) -> Result<Vec<VMParsed>, Error> {
@@ -1438,7 +1393,6 @@ impl Display for Command {
 
 #[derive(Debug)]
 enum VMLine {
-    Blank,
     Comment(String),
     Push(Segment, i16),
     Pop(Segment, i16),
@@ -1514,7 +1468,6 @@ impl VMLine {
 
     fn get_command(&self) -> Command {
         match self {
-            &Self::Blank | &Self::Comment(..) => Command::Invalid,
             &Self::Push(..) => Command::Push,
             &Self::Pop(..) => Command::Pop,
             &Self::Function(..) => Command::Function,
@@ -1532,12 +1485,13 @@ impl VMLine {
             &Self::Gt => Command::Gt,
             &Self::Lt => Command::Lt,
             &Self::Eq => Command::Eq,
+            _ => Command::Invalid,
         }
     }
 
     fn is_sloc(&self) -> bool {
         match self {
-            &Self::Blank | &Self::Comment(..) => false,
+            &Self::Comment(..) => false,
             _ => true,
         }
     }
@@ -1570,7 +1524,6 @@ impl Display for VMLine {
             | Self::Lt
             | Self::Eq => write!(f, "{}", self.get_command().as_str()),
             Self::Comment(text) => write!(f, "//{}", text),
-            Self::Blank => Ok(()),
         }
     }
 }
@@ -1641,16 +1594,7 @@ impl VMTranslator {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        common::{LegacyParser, Unit},
-        vm::{Bootstrapper, VMParsed},
-    };
-
-    use super::VMUnit;
-
-    fn to_src(src: &str) -> Vec<String> {
-        src.lines().map(|line| line.to_owned()).collect()
-    }
+    use crate::vm::{Bootstrapper, VMParsed};
 
     fn to_out(src: &str) -> String {
         let lines: Vec<_> = src

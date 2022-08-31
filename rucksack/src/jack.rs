@@ -1,6 +1,6 @@
 use std::io::Error;
 
-use crate::common::{Unit, UnitFactory, LegacyParser};
+use crate::common::{Unit, UnitFactory};
 
 pub type JackVMCode = &'static str;
 
