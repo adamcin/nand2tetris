@@ -1544,13 +1544,13 @@ impl<'a> Parser<'a, VMLine> for VMLineParser {
                 let trail_comment = right(pad0(), ok(right(match_literal("//"), non_nl0())));
                 if cmd.args_needed() == 0 {
                     let parser = and_then(match_literal(cmd.as_str()), |()| VMLine::from_0arg(cmd));
-                    return Box::new(or_else_b(acc, left(parser, trail_comment)));
+                    return Box::new(or_else(unbox(acc), left(parser, trail_comment)));
                 } else if cmd.args_needed() == 1 {
                     let parser = and_then(
                         right(pair(match_literal(cmd.as_str()), pad1()), Symbol::parser()),
                         |arg1| VMLine::from_1arg(cmd, &arg1),
                     );
-                    return Box::new(or_else_b(acc, left(parser, trail_comment)));
+                    return Box::new(or_else(unbox(acc), left(parser, trail_comment)));
                 } else {
                     let parser = and_then(
                         right(
@@ -1559,7 +1559,7 @@ impl<'a> Parser<'a, VMLine> for VMLineParser {
                         ),
                         |(arg1, arg2)| VMLine::from_2arg(cmd, &arg1, arg2),
                     );
-                    return Box::new(or_else_b(acc, left(parser, trail_comment)));
+                    return Box::new(or_else(unbox(acc), left(parser, trail_comment)));
                 }
             })
             .parse(input)
