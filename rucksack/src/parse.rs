@@ -5,12 +5,8 @@ pub trait Parser<'a, Output> {
     fn parse(&self, input: &'a str) -> ParseResult<'a, Output>;
 }
 
-pub trait Matchable {
-    fn matcher<'a>(&self, _ctx: &'a Ctx) -> Box<dyn Parser<'a, ()> + 'a>;
-}
-
-pub trait Parseable {
-    fn parser<'a>(_ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a>;
+pub trait Parses<Output> {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Output>;
 }
 
 impl<'a, F, Output> Parser<'a, Output> for F
@@ -79,15 +75,8 @@ where
     move |input| p.parse(input).or_else(|next_input| elze.parse(next_input))
 }
 
-pub fn none<'a, R>(_ctx: &'a Ctx) -> impl Parser<'a, R> {
+pub fn none<'a, R>() -> impl Parser<'a, R> {
     move |input| Err(input)
-}
-
-pub fn unbox<'a, P, R>(p: Box<P>) -> impl Parser<'a, R>
-where
-    P: Parser<'a, R> + ?Sized,
-{
-    move |input| p.parse(input)
 }
 
 pub fn left<'a, P1, P2, R1, R2>(left: P1, r: P2) -> impl Parser<'a, R1>
@@ -319,10 +308,6 @@ pub fn comspace<'a>() -> impl Parser<'a, ()> {
         ),
         1..,
     ))
-}
-
-pub struct Ctx {
-    
 }
 
 #[cfg(test)]

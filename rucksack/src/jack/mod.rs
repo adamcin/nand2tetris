@@ -14,23 +14,18 @@ use self::class::Class;
 use self::id::Id;
 use self::keyword::Keyword;
 
-pub struct JackParser<'c> {
-    ctx: &'c Ctx,
-}
-impl<'c> JackParser<'c> {
-    pub fn new(ctx: &'c Ctx) -> Self {
-        Self { ctx }
+pub struct JackParser {}
+impl<'c> JackParser {
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
-impl<'a, 'c> Parser<'a, Class> for JackParser<'c>
-where
-    'c: 'a,
-{
+impl<'a> Parser<'a, Class> for JackParser {
     fn parse(&self, input: &'a str) -> ParseResult<'a, Class> {
         right(
             ok(comspace()),
-            left(unbox(Class::parser(self.ctx)), ok(comspace())),
+            left(move |input| Class::parse(input), ok(comspace())),
         )
         .parse(input)
     }
@@ -48,9 +43,8 @@ impl Unit for JackUnit {
     }
 
     fn parse<'a>(&'a self) -> Result<Self::Syntax, Error> {
-        let ctx = Ctx {};
         let source = std::fs::read_to_string(self.src_path())?;
-        let parser = JackParser::new(&ctx);
+        let parser = JackParser::new();
         let result = parser.parse(source.as_str());
         match result {
             Ok((_rem, parsed)) => Ok(parsed),

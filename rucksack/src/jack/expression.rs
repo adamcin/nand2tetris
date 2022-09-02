@@ -18,82 +18,69 @@ pub enum Op {
     Lt(Term),
     Gt(Term),
 }
-impl Parseable for Op {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(or_else(
+impl Parses<Op> for Op {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Op> {
+        or_else(
             map(
-                right(
-                    left(unbox(Sym::Plus.matcher(ctx)), ok(comspace())),
-                    unbox(Term::parser(ctx)),
-                ),
+                right(left(Sym::Plus, ok(comspace())), move |input| {
+                    Term::parse(input)
+                }),
                 |term| Op::Plus(term),
             ),
             or_else(
                 map(
-                    right(
-                        left(unbox(Sym::Minus.matcher(ctx)), ok(comspace())),
-                        unbox(Term::parser(ctx)),
-                    ),
+                    right(left(Sym::Minus, ok(comspace())), move |input| {
+                        Term::parse(input)
+                    }),
                     |term| Op::Minus(term),
                 ),
                 or_else(
                     map(
-                        right(
-                            left(unbox(Sym::Splat.matcher(ctx)), ok(comspace())),
-                            unbox(Term::parser(ctx)),
-                        ),
+                        right(left(Sym::Splat, ok(comspace())), move |input| {
+                            Term::parse(input)
+                        }),
                         |term| Op::Splat(term),
                     ),
                     or_else(
                         map(
-                            right(
-                                left(unbox(Sym::Slash.matcher(ctx)), ok(comspace())),
-                                unbox(Term::parser(ctx)),
-                            ),
+                            right(left(Sym::Slash, ok(comspace())), move |input| {
+                                Term::parse(input)
+                            }),
                             |term| Op::Div(term),
                         ),
                         or_else(
                             map(
-                                right(
-                                    left(unbox(Sym::Amp.matcher(ctx)), ok(comspace())),
-                                    unbox(Term::parser(ctx)),
-                                ),
+                                right(left(Sym::Amp, ok(comspace())), move |input| {
+                                    Term::parse(input)
+                                }),
                                 |term| Op::And(term),
                             ),
                             or_else(
                                 map(
-                                    right(
-                                        left(unbox(Sym::Pipe.matcher(ctx)), ok(comspace())),
-                                        unbox(Term::parser(ctx)),
-                                    ),
+                                    right(left(Sym::Pipe, ok(comspace())), move |input| {
+                                        Term::parse(input)
+                                    }),
                                     |term| Op::Or(term),
                                 ),
                                 or_else(
                                     map(
-                                        right(
-                                            left(unbox(Sym::Equals.matcher(ctx)), ok(comspace())),
-                                            unbox(Term::parser(ctx)),
-                                        ),
+                                        right(left(Sym::Equals, ok(comspace())), move |input| {
+                                            Term::parse(input)
+                                        }),
                                         |term| Op::Eq(term),
                                     ),
                                     or_else(
                                         map(
                                             right(
-                                                left(
-                                                    unbox(Sym::LAngle.matcher(ctx)),
-                                                    ok(comspace()),
-                                                ),
-                                                unbox(Term::parser(ctx)),
+                                                left(Sym::LAngle, ok(comspace())),
+                                                move |input| Term::parse(input),
                                             ),
                                             |term| Op::Lt(term),
                                         ),
                                         map(
                                             right(
-                                                left(
-                                                    unbox(Sym::RAngle.matcher(ctx)),
-                                                    ok(comspace()),
-                                                ),
-                                                unbox(Term::parser(ctx)),
+                                                left(Sym::RAngle, ok(comspace())),
+                                                move |input| Term::parse(input),
                                             ),
                                             |term| Op::Gt(term),
                                         ),
@@ -104,7 +91,8 @@ impl Parseable for Op {
                     ),
                 ),
             ),
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -113,26 +101,26 @@ pub enum UnaryOp {
     Neg(Term),
     Tilde(Term),
 }
-impl Parseable for UnaryOp {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(or_else(
+impl Parses<UnaryOp> for UnaryOp {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, UnaryOp> {
+        or_else(
             map(
-                right(
-                    left(unbox(Sym::Minus.matcher(ctx)), ok(comspace())),
-                    unbox(Term::parser(ctx)),
-                ),
+                right(left(Sym::Minus, ok(comspace())), move |input| {
+                    Term::parse(input)
+                }),
                 |term| UnaryOp::Neg(term),
             ),
             map(
-                right(
-                    left(unbox(Sym::Tilde.matcher(ctx)), ok(comspace())),
-                    unbox(Term::parser(ctx)),
-                ),
+                right(left(Sym::Tilde, ok(comspace())), move |input| {
+                    Term::parse(input)
+                }),
                 |term| UnaryOp::Tilde(term),
             ),
-        ))
+        )
+        .parse(input)
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Term {
     IntConst(IntConst),
@@ -145,102 +133,114 @@ pub enum Term {
     SubroutineCall(Box<SubroutineCall>),
 }
 impl Term {
-    pub fn int_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
+    pub fn int_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
         println!("Term::int_parser");
-        Box::new(map(unbox(IntConst::parser(ctx)), |value| {
-            Self::IntConst(value)
-        }))
+        map(
+            move |input| IntConst::parse(input),
+            |value| Self::IntConst(value),
+        )
+        .parse(input)
     }
 
-    pub fn string_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
+    pub fn string_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
         println!("Term::string_parser");
-        Box::new(map(unbox(StringConst::parser(ctx)), |value| {
-            Self::StringConst(value)
-        }))
+        map(
+            move |input| StringConst::parse(input),
+            |value| Self::StringConst(value),
+        )
+        .parse(input)
     }
 
-    pub fn keyword_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
+    pub fn keyword_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
         println!("Term::keyword_parser");
-        Box::new(map(unbox(KeywordConst::parser(ctx)), |value| {
-            Self::KeywordConst(value)
-        }))
+        map(
+            move |input| KeywordConst::parse(input),
+            |value| Self::KeywordConst(value),
+        )
+        .parse(input)
     }
 
-    pub fn var_name_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
+    pub fn var_name_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
         println!("Term::var_name_parser");
-        Box::new(map(unbox(Id::parser(ctx)), |value| Self::VarName(value)))
+        map(move |input| Id::parse(input), |value| Self::VarName(value)).parse(input)
     }
 
-    pub fn var_sub_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
+    pub fn var_sub_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
         println!("Term::var_sub_parser");
-        Box::new(map(
+        map(
             pair(
-                left(unbox(Id::parser(ctx)), ok(comspace())),
+                left(move |input| Id::parse(input), ok(comspace())),
                 right(
-                    left(unbox(Sym::LSquare.matcher(ctx)), ok(comspace())),
+                    left(Sym::LSquare, ok(comspace())),
                     left(
-                        left(unbox(Expression::parser(ctx)), ok(comspace())),
-                        unbox(Sym::RSquare.matcher(ctx)),
+                        left(move |input| Expression::parse(input), ok(comspace())),
+                        Sym::RSquare,
                     ),
                 ),
             ),
             |(id, expr)| Self::VarSub(id, Box::new(expr)),
-        ))
+        )
+        .parse(input)
     }
 
-    pub fn expr_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
+    pub fn expr_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
         println!("Term::expr_parser");
-        Box::new(map(
+        map(
             right(
-                left(unbox(Sym::LRound.matcher(ctx)), ok(comspace())),
+                left(Sym::LRound, ok(comspace())),
                 left(
-                    left(unbox(Expression::parser(ctx)), ok(comspace())),
-                    unbox(Sym::RRound.matcher(ctx)),
+                    left(move |input| Expression::parse(input), ok(comspace())),
+                    Sym::RRound,
                 ),
             ),
             |expr| Self::Expr(Box::new(expr)),
-        ))
+        )
+        .parse(input)
     }
 
-    pub fn unary_op_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
+    pub fn unary_op_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
         println!("Term::unary_op_parser");
-        Box::new(map(unbox(UnaryOp::parser(ctx)), |value| {
-            Self::UnaryOp(Box::new(value))
-        }))
+        map(
+            move |input| UnaryOp::parse(input),
+            |value| Self::UnaryOp(Box::new(value)),
+        )
+        .parse(input)
     }
 
-    pub fn subroutine_call_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
+    pub fn subroutine_call_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
         println!("Term::subroutine_call_parser");
-        Box::new(map(unbox(SubroutineCall::parser(ctx)), |value| {
-            Self::SubroutineCall(Box::new(value))
-        }))
+        map(
+            move |input| SubroutineCall::parse(input),
+            |value| Self::SubroutineCall(Box::new(value)),
+        )
+        .parse(input)
     }
 }
-impl Parseable for Term {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        println!("Term::parser");
-        Box::new(or_else(
-            unbox(Self::expr_parser(ctx)),
+impl Parses<Term> for Term {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Term> {
+        or_else(
+            move |input| Self::expr_parser(input),
             or_else(
-                unbox(Self::string_parser(ctx)),
+                move |input| Self::string_parser(input),
                 or_else(
-                    unbox(Self::unary_op_parser(ctx)),
+                    move |input| Self::unary_op_parser(input),
                     or_else(
-                        unbox(Self::int_parser(ctx)),
+                        move |input| Self::int_parser(input),
                         or_else(
-                            unbox(Self::subroutine_call_parser(ctx)),
+                            move |input| Self::subroutine_call_parser(input),
                             or_else(
-                                unbox(Self::var_sub_parser(ctx)),
+                                move |input| Self::var_sub_parser(input),
                                 or_else(
-                                    unbox(Self::var_name_parser(ctx)),
-                                    unbox(Self::keyword_parser(ctx)),
+                                    move |input| Self::var_name_parser(input),
+                                    move |input| Self::keyword_parser(input),
                                 ),
                             ),
                         ),
                     ),
                 ),
             ),
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -254,15 +254,16 @@ impl Expression {
         Self { term, ops }
     }
 }
-impl Parseable for Expression {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
+impl Parses<Expression> for Expression {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Expression> {
+        map(
             pair(
-                left(unbox(Term::parser(ctx)), ok(comspace())),
-                range(left(unbox(Op::parser(ctx)), ok(comspace())), 0..),
+                left(move |input| Term::parse(input), ok(comspace())),
+                range(left(move |input| Op::parse(input), ok(comspace())), 0..),
             ),
             |(term, ops)| Expression::new(term, ops),
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -275,16 +276,16 @@ impl ExpressionList {
         Self { exprs }
     }
 }
-impl Parseable for ExpressionList {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
+impl Parses<ExpressionList> for ExpressionList {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, ExpressionList> {
+        map(
             ok(map(
                 pair(
-                    left(unbox(Expression::parser(ctx)), ok(comspace())),
+                    left(move |input| Expression::parse(input), ok(comspace())),
                     range(
                         right(
-                            left(unbox(Sym::Comma.matcher(ctx)), ok(comspace())),
-                            left(unbox(Expression::parser(ctx)), ok(comspace())),
+                            left(Sym::Comma, ok(comspace())),
+                            left(move |input| Expression::parse(input), ok(comspace())),
                         ),
                         0..,
                     ),
@@ -292,7 +293,8 @@ impl Parseable for ExpressionList {
                 |(first, exprs)| vec![vec![first], exprs].concat(),
             )),
             |exprs| ExpressionList::new(exprs.unwrap_or(Vec::new())),
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -311,27 +313,28 @@ impl SubroutineCall {
         }
     }
 }
-impl Parseable for SubroutineCall {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
+impl Parses<SubroutineCall> for SubroutineCall {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, SubroutineCall> {
+        map(
             pair(
                 ok(left(
-                    left(unbox(Id::parser(ctx)), ok(comspace())),
-                    left(unbox(Sym::Dot.matcher(ctx)), ok(comspace())),
+                    left(move |input| Id::parse(input), ok(comspace())),
+                    left(Sym::Dot, ok(comspace())),
                 )),
                 pair(
-                    left(unbox(Id::parser(ctx)), ok(comspace())),
+                    left(move |input| Id::parse(input), ok(comspace())),
                     right(
-                        left(unbox(Sym::LRound.matcher(ctx)), ok(comspace())),
+                        left(Sym::LRound, ok(comspace())),
                         left(
-                            left(unbox(ExpressionList::parser(ctx)), ok(comspace())),
-                            unbox(Sym::RRound.matcher(ctx)),
+                            left(move |input| ExpressionList::parse(input), ok(comspace())),
+                            Sym::RRound,
                         ),
                     ),
                 ),
             ),
             |(qualifier, (name, exprs))| SubroutineCall::new(qualifier, name, exprs),
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -342,34 +345,25 @@ mod tests {
 
     #[test]
     fn term_int_parser() {
-        let ctx = Ctx {};
-        let parser = Term::int_parser(&ctx);
-
         assert_eq!(
             Ok(("", Term::IntConst(IntConst::new(12345).expect("valid")))),
-            parser.parse("12345")
+            Term::int_parser("12345")
         )
     }
 
     #[test]
     fn term_string_parser() {
-        let ctx = Ctx {};
-        let parser = Term::string_parser(&ctx);
-
         assert_eq!(
             Ok((
                 "",
                 Term::StringConst(StringConst::new("a string".to_owned()))
             )),
-            parser.parse("\"a string\"")
+            Term::string_parser("\"a string\"")
         )
     }
 
     #[test]
     fn term_expr_parser() {
-        let ctx = Ctx {};
-        let parser = Term::expr_parser(&ctx);
-
         assert_eq!(
             Ok((
                 "",
@@ -378,7 +372,7 @@ mod tests {
                     Vec::new()
                 )))
             )),
-            parser.parse("(\"a string\")")
+            Term::expr_parser("(\"a string\")")
         );
 
         // assert_eq!(
@@ -389,9 +383,6 @@ mod tests {
 
     #[test]
     fn subroutine_call_parser() {
-        let ctx = Ctx {};
-        let parser = SubroutineCall::parser(&ctx);
-
         assert_eq!(
             Ok((
                 "",
@@ -401,7 +392,7 @@ mod tests {
                     ExpressionList::new(Vec::new())
                 )
             )),
-            parser.parse("a_function()")
+            SubroutineCall::parse("a_function()")
         );
 
         // assert_eq!(
@@ -412,8 +403,6 @@ mod tests {
 
     #[test]
     fn term_call_parser() {
-        let ctx = Ctx {};
-        let parser = Term::subroutine_call_parser(&ctx);
 
         assert_eq!(
             Ok((
@@ -424,7 +413,7 @@ mod tests {
                     ExpressionList::new(Vec::new())
                 )))
             )),
-            parser.parse("a_function()")
+            Term::subroutine_call_parser("a_function()")
         );
 
         // assert_eq!(
@@ -435,8 +424,7 @@ mod tests {
 
     #[test]
     fn unary_ops() {
-        let ctx = Ctx {};
-        let parser = UnaryOp::parser(&ctx);
+        let parser = move |input| UnaryOp::parse(input);
 
         // assert_eq!(
         //     Ok((

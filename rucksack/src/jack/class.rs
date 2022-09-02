@@ -6,19 +6,22 @@ use super::keyword::Keyword;
 use super::statement::Statements;
 use super::sym::Sym;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClassVarKind {
     Static,
     Field,
 }
-impl Parseable for ClassVarKind {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(or_else(
-            map(unbox(Keyword::Static.matcher(ctx)), |()| Self::Static),
-            map(unbox(Keyword::Field.matcher(ctx)), |()| Self::Field),
-        ))
+impl Parses<ClassVarKind> for ClassVarKind {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, ClassVarKind> {
+        or_else(
+            map(Keyword::Static, |_| Self::Static),
+            map(Keyword::Field, |_| Self::Field),
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassVarDec {
     var_kind: ClassVarKind,
     var_type: Type,
@@ -33,22 +36,25 @@ impl ClassVarDec {
         }
     }
 }
-impl Parseable for ClassVarDec {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
+impl Parses<ClassVarDec> for ClassVarDec {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, ClassVarDec> {
+        map(
             pair(
-                left(unbox(ClassVarKind::parser(ctx)), comspace()),
+                left(move |input| ClassVarKind::parse(input), comspace()),
                 pair(
-                    left(unbox(Type::parser(ctx)), comspace()),
+                    left(move |input| Type::parse(input), comspace()),
                     map(
                         pair(
-                            unbox(Id::parser(ctx)),
-                            range(
-                                right(
-                                    left(left(comspace(), match_literal(",")), comspace()),
-                                    unbox(Id::parser(ctx)),
+                            left(move |input| Id::parse(input), ok(comspace())),
+                            left(
+                                range(
+                                    right(
+                                        left(Sym::Comma, ok(comspace())),
+                                        left(move |input| Id::parse(input), ok(comspace())),
+                                    ),
+                                    0..,
                                 ),
-                                0..,
+                                Sym::Semi,
                             ),
                         ),
                         |(id, ids)| -> Vec<Id> { vec![vec![id], ids].concat() },
@@ -56,43 +62,46 @@ impl Parseable for ClassVarDec {
                 ),
             ),
             |(var_kind, (var_type, var_names))| Self::new(var_kind, var_type, var_names),
-        ))
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubroutineKind {
     Constructor,
     Function,
     Method,
 }
-impl Parseable for SubroutineKind {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(or_else(
-            map(unbox(Keyword::Constructor.matcher(ctx)), |()| {
-                Self::Constructor
-            }),
+impl Parses<SubroutineKind> for SubroutineKind {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, SubroutineKind> {
+        or_else(
+            map(Keyword::Constructor, |_| Self::Constructor),
             or_else(
-                map(unbox(Keyword::Function.matcher(ctx)), |()| Self::Function),
-                map(unbox(Keyword::Method.matcher(ctx)), |()| Self::Method),
+                map(Keyword::Function, |_| Self::Function),
+                map(Keyword::Method, |_| Self::Method),
             ),
-        ))
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
     Void,
     Returns(Type),
 }
-impl Parseable for ReturnType {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(or_else(
-            map(unbox(Keyword::Void.matcher(ctx)), |()| Self::Void),
-            map(unbox(Type::parser(ctx)), |t| Self::Returns(t)),
-        ))
+impl Parses<ReturnType> for ReturnType {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, ReturnType> {
+        or_else(
+            map(Keyword::Void, |_| Self::Void),
+            map(move |input| Type::parse(input), |t| Self::Returns(t)),
+        )
+        .parse(input)
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubroutineParameter {
     var_type: Type,
     var_name: Id,
@@ -102,18 +111,20 @@ impl SubroutineParameter {
         Self { var_type, var_name }
     }
 }
-impl Parseable for SubroutineParameter {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
+impl Parses<SubroutineParameter> for SubroutineParameter {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, SubroutineParameter> {
+        map(
             pair(
-                left(unbox(Type::parser(ctx)), comspace()),
-                left(unbox(Id::parser(ctx)), comspace()),
+                left(move |input| Type::parse(input), comspace()),
+                move |input| Id::parse(input),
             ),
             |(var_type, var_name)| Self::new(var_type, var_name),
-        ))
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterList {
     vars: Vec<SubroutineParameter>,
 }
@@ -122,42 +133,34 @@ impl ParameterList {
         Self { vars }
     }
 }
-impl Parseable for ParameterList {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(right(
-            left(unbox(Sym::LRound.matcher(ctx)), ok(comspace())),
-            left(
-                map(
-                    ok(pair(
-                        unbox(SubroutineParameter::parser(ctx)),
-                        until(
-                            right(
-                                ok(comspace()),
-                                right(
-                                    unbox(Sym::Comma.matcher(ctx)),
-                                    right(ok(comspace()), unbox(SubroutineParameter::parser(ctx))),
-                                ),
-                            ),
-                            0..,
-                            Sym::RRound.as_str(),
-                        ),
-                    )),
-                    |vars_o: Option<(SubroutineParameter, Vec<SubroutineParameter>)>| {
-                        Self::new(
-                            vars_o
-                                .map(|(var, vars)| -> Vec<SubroutineParameter> {
-                                    vec![vec![var], vars].concat()
-                                })
-                                .unwrap_or_else(Vec::new),
-                        )
-                    },
+impl Parses<ParameterList> for ParameterList {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, ParameterList> {
+        map(
+            ok(pair(
+                move |input| SubroutineParameter::parse(input),
+                range(
+                    right(
+                        right(ok(comspace()), left(Sym::Comma, ok(comspace()))),
+                        move |input| SubroutineParameter::parse(input),
+                    ),
+                    0..,
                 ),
-                right(ok(comspace()), unbox(Sym::RRound.matcher(ctx))),
-            ),
-        ))
+            )),
+            |vars_o: Option<(SubroutineParameter, Vec<SubroutineParameter>)>| {
+                Self::new(
+                    vars_o
+                        .map(|(var, vars)| -> Vec<SubroutineParameter> {
+                            vec![vec![var], vars].concat()
+                        })
+                        .unwrap_or_else(Vec::new),
+                )
+            },
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VarDec {
     var_type: Type,
     var_names: Vec<Id>,
@@ -170,43 +173,38 @@ impl VarDec {
         }
     }
 }
-impl Parseable for VarDec {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
+impl Parses<VarDec> for VarDec {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, VarDec> {
+        map(
             right(
-                unbox(Keyword::Var.matcher(ctx)),
-                right(
-                    comspace(),
-                    pair(
-                        left(unbox(Type::parser(ctx)), comspace()),
-                        left(
-                            map(
-                                pair(
-                                    unbox(Id::parser(ctx)),
-                                    until(
-                                        right(
-                                            ok(comspace()),
-                                            right(
-                                                unbox(Sym::Comma.matcher(ctx)),
-                                                right(ok(comspace()), unbox(Id::parser(ctx))),
-                                            ),
-                                        ),
-                                        0..,
-                                        Sym::Semi.as_str(),
+                left(Keyword::Var, comspace()),
+                pair(
+                    left(move |input| Type::parse(input), comspace()),
+                    left(
+                        map(
+                            pair(
+                                left(move |input| Id::parse(input), ok(comspace())),
+                                range(
+                                    right(
+                                        left(Sym::Comma, ok(comspace())),
+                                        left(move |input| Id::parse(input), ok(comspace())),
                                     ),
+                                    0..,
                                 ),
-                                |(id, vars)| vec![vec![id], vars].concat(),
                             ),
-                            right(ok(comspace()), unbox(Sym::Semi.matcher(ctx))),
+                            |(id, vars)| vec![vec![id], vars].concat(),
                         ),
+                        Sym::Semi,
                     ),
                 ),
             ),
             |(var_type, var_names)| VarDec::new(var_type, var_names),
-        ))
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubroutineBody {
     var_decs: Vec<VarDec>,
     statements: Statements,
@@ -219,24 +217,26 @@ impl SubroutineBody {
         }
     }
 }
-impl Parseable for SubroutineBody {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(right(
-            left(unbox(Sym::LCurly.matcher(ctx)), ok(comspace())),
+impl Parses<SubroutineBody> for SubroutineBody {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, SubroutineBody> {
+        right(
+            left(Sym::LCurly, ok(comspace())),
             left(
                 map(
                     pair(
-                        range(left(unbox(VarDec::parser(ctx)), ok(comspace())), 0..),
-                        left(unbox(Statements::parser(ctx)), ok(comspace())),
+                        range(left(move |input| VarDec::parse(input), ok(comspace())), 0..),
+                        left(move |input| Statements::parse(input), ok(comspace())),
                     ),
                     |(var_decs, statements)| SubroutineBody::new(var_decs, statements),
                 ),
-                right(ok(comspace()), unbox(Sym::RCurly.matcher(ctx))),
+                right(ok(comspace()), Sym::RCurly),
             ),
-        ))
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubroutineDec {
     kind: SubroutineKind,
     ret: ReturnType,
@@ -261,18 +261,24 @@ impl SubroutineDec {
         }
     }
 }
-impl Parseable for SubroutineDec {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
+impl Parses<SubroutineDec> for SubroutineDec {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, SubroutineDec> {
+        map(
             pair(
-                left(unbox(SubroutineKind::parser(ctx)), comspace()),
+                left(move |input| SubroutineKind::parse(input), comspace()),
                 pair(
-                    left(unbox(ReturnType::parser(ctx)), comspace()),
+                    left(move |input| ReturnType::parse(input), comspace()),
                     pair(
-                        left(unbox(Id::parser(ctx)), ok(comspace())),
+                        left(move |input| Id::parse(input), ok(comspace())),
                         pair(
-                            left(unbox(ParameterList::parser(ctx)), ok(comspace())),
-                            left(unbox(SubroutineBody::parser(ctx)), ok(comspace())),
+                            right(
+                                left(Sym::LRound, ok(comspace())),
+                                left(
+                                    left(move |input| ParameterList::parse(input), ok(comspace())),
+                                    left(Sym::RRound, ok(comspace())),
+                                ),
+                            ),
+                            left(move |input| SubroutineBody::parse(input), ok(comspace())),
                         ),
                     ),
                 ),
@@ -280,10 +286,12 @@ impl Parseable for SubroutineDec {
             |(kind, (ret, (name, (params, body))))| {
                 SubroutineDec::new(kind, ret, name, params, body)
             },
-        ))
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Class {
     name: Id,
     vars: Vec<ClassVarDec>,
@@ -295,32 +303,80 @@ impl Class {
         Self { name, vars, subs }
     }
 }
-
-impl Parseable for Class {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        use Keyword::Class;
-        use Sym::{LCurly, RCurly};
-        Box::new(right(
-            left(unbox(Class.matcher(ctx)), comspace()),
+impl Parses<Class> for Class {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Class> {
+        right(
+            left(Keyword::Class, comspace()),
             map(
                 pair(
-                    left(unbox(Id::parser(ctx)), ok(comspace())),
+                    left(move |input| Id::parse(input), ok(comspace())),
                     right(
-                        left(unbox(LCurly.matcher(ctx)), ok(comspace())),
+                        left(Sym::LCurly, ok(comspace())),
                         left(
                             pair(
-                                left(range(unbox(ClassVarDec::parser(ctx)), 0..), ok(comspace())),
                                 left(
-                                    range(unbox(SubroutineDec::parser(ctx)), 0..),
+                                    range(move |input| ClassVarDec::parse(input), 0..),
+                                    ok(comspace()),
+                                ),
+                                left(
+                                    range(move |input| SubroutineDec::parse(input), 0..),
                                     ok(comspace()),
                                 ),
                             ),
-                            unbox(RCurly.matcher(ctx)),
+                            Sym::RCurly,
                         ),
                     ),
                 ),
                 |(id, (vars, subs))| Self::new(id, vars, subs),
             ),
-        ))
+        )
+        .parse(input)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_simple() {
+        let parser = move |input| Class::parse(input);
+        assert_eq!(
+            Ok((
+                "",
+                Class::new(Id::new("MyClass".to_owned()), Vec::new(), Vec::new())
+            )),
+            parser.parse("class MyClass {}")
+        );
+        assert_eq!(
+            Ok((
+                " extra",
+                Class::new(Id::new("MyClass".to_owned()), Vec::new(), Vec::new())
+            )),
+            parser.parse("class MyClass {} extra")
+        );
+
+        assert_eq!(
+            Ok((
+                " extra",
+                Class::new(
+                    Id::new("MyClass".to_owned()),
+                    vec![ClassVarDec::new(
+                        ClassVarKind::Static,
+                        Type::Int,
+                        vec![Id::new("count".to_owned())]
+                    )],
+                    Vec::new()
+                )
+            )),
+            parser.parse(
+                r"class MyClass {
+                static int count// some inline comment
+                /* 
+                some multiline comment;
+                 */
+                ;
+            } extra"
+            )
+        );
     }
 }

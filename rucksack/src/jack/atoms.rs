@@ -13,9 +13,9 @@ impl IntConst {
         }
     }
 }
-impl Parseable for IntConst {
-    fn parser<'a>(_ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(and_then(
+impl Parses<IntConst> for IntConst {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, IntConst> {
+        and_then(
             map(range(digit_char(), 1..), |chars| -> String {
                 chars.into_iter().collect()
             }),
@@ -24,7 +24,8 @@ impl Parseable for IntConst {
                     .map_err(|err| err.to_string())
                     .and_then(|num| IntConst::new(num))
             },
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -35,9 +36,9 @@ impl StringConst {
         Self(value)
     }
 }
-impl Parseable for StringConst {
-    fn parser<'a>(_ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
+impl Parses<StringConst> for StringConst {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, StringConst> {
+        map(
             right(
                 match_literal("\""),
                 left(
@@ -48,7 +49,8 @@ impl Parseable for StringConst {
                 ),
             ),
             |text| StringConst(text),
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -59,18 +61,19 @@ pub enum Type {
     Boolean,
     ClassName(Id),
 }
-impl Parseable for Type {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(or_else(
-            map(unbox(Keyword::Int.matcher(ctx)), |()| Self::Int),
+impl Parses<Type> for Type {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Type> {
+        or_else(
+            map(Keyword::Int, |_| Self::Int),
             or_else(
-                map(unbox(Keyword::Char.matcher(ctx)), |()| Self::Char),
+                map(Keyword::Char, |_| Self::Char),
                 or_else(
-                    map(unbox(Keyword::Boolean.matcher(ctx)), |()| Self::Boolean),
-                    map(unbox(Id::parser(ctx)), |id| Self::ClassName(id)),
+                    map(Keyword::Boolean, |_| Self::Boolean),
+                    map(move |input| Id::parse(input), |id| Self::ClassName(id)),
                 ),
             ),
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -81,18 +84,19 @@ pub enum KeywordConst {
     Null,
     This,
 }
-impl Parseable for KeywordConst {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(or_else(
-            map(unbox(Keyword::True.matcher(ctx)), |()| Self::True),
+impl Parses<KeywordConst> for KeywordConst {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, KeywordConst> {
+        or_else(
+            map(Keyword::True, |_| Self::True),
             or_else(
-                map(unbox(Keyword::False.matcher(ctx)), |()| Self::False),
+                map(Keyword::False, |_| Self::False),
                 or_else(
-                    map(unbox(Keyword::Null.matcher(ctx)), |()| Self::Null),
-                    map(unbox(Keyword::This.matcher(ctx)), |()| Self::This),
+                    map(Keyword::Null, |_| Self::Null),
+                    map(Keyword::This, |_| Self::This),
                 ),
             ),
-        ))
+        )
+        .parse(input)
     }
 }
 
@@ -101,8 +105,8 @@ mod tests {
     use super::*;
     #[test]
     fn types() {
-        let ctx = Ctx {};
-        let parser = Type::parser(&ctx);
+
+        let parser = move |input| Type::parse(input);
 
         assert_eq!(Ok(("", Type::Int)), parser.parse("int"));
         assert_eq!(Ok(("", Type::Char)), parser.parse("char"));
@@ -117,26 +121,20 @@ mod tests {
 
     #[test]
     fn string_const() {
-        let ctx = Ctx {};
-        let parser = StringConst::parser(&ctx);
-
         assert_eq!(
             Ok(("", StringConst("a string".to_owned()))),
-            parser.parse("\"a string\"")
+            StringConst::parse("\"a string\"")
         );
-        assert_eq!(Err("a string"), parser.parse("a string"));
+        assert_eq!(Err("a string"), StringConst::parse("a string"));
     }
 
     #[test]
     fn int_const() {
-        let ctx = Ctx {};
-        let parser = IntConst::parser(&ctx);
-
-        assert_eq!(Ok(("", IntConst(0))), parser.parse("0"));
-        assert_eq!(Ok(("", IntConst(12345))), parser.parse("12345"));
-        assert_eq!(Ok(("", IntConst(32767))), parser.parse("32767"));
-        assert_eq!(Err("-1"), parser.parse("-1"));
-        assert_eq!(Err("32768"), parser.parse("32768"));
-        assert_eq!(Err("123456"), parser.parse("123456"));
+        assert_eq!(Ok(("", IntConst(0))), IntConst::parse("0"));
+        assert_eq!(Ok(("", IntConst(12345))), IntConst::parse("12345"));
+        assert_eq!(Ok(("", IntConst(32767))), IntConst::parse("32767"));
+        assert_eq!(Err("-1"), IntConst::parse("-1"));
+        assert_eq!(Err("32768"), IntConst::parse("32768"));
+        assert_eq!(Err("123456"), IntConst::parse("123456"));
     }
 }

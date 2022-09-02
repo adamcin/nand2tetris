@@ -1,5 +1,6 @@
 use crate::parse::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sym {
     LCurly,
     RCurly,
@@ -49,9 +50,9 @@ impl Sym {
     }
 }
 
-impl Matchable for Sym {
-    fn matcher<'a>(&self, _ctx: &'a Ctx) -> Box<dyn Parser<'a, ()> + 'a> {
-        Box::new(match_literal(self.as_str()))
+impl<'a> Parser<'a, Sym> for Sym {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, Sym> {
+        map(match_literal(self.as_str()), |()| *self).parse(input)
     }
 }
 

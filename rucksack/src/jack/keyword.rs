@@ -1,5 +1,6 @@
 use crate::parse::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keyword {
     Class,
     Constructor,
@@ -82,9 +83,9 @@ impl Keyword {
     }
 }
 
-impl Matchable for Keyword {
-    fn matcher<'a>(&self, _ctx: &'a Ctx) -> Box<dyn Parser<'a, ()> + 'a> {
-        Box::new(match_literal(self.as_str()))
+impl<'a> Parser<'a, Keyword> for Keyword {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, Keyword> {
+        map(match_literal(self.as_str()), |()| *self).parse(input)
     }
 }
 
@@ -93,9 +94,9 @@ mod tests {
     use super::*;
     #[test]
     fn keywords() {
-        let ctx = Ctx {};
-
-        assert_eq!(Ok(("", ())), Keyword::Boolean.matcher(&ctx).parse("boolean"));
-        
+        assert_eq!(
+            Ok(("", Keyword::Boolean)),
+            Keyword::Boolean.parse("boolean")
+        );
     }
 }

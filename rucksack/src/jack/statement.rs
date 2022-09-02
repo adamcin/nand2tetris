@@ -7,6 +7,7 @@ use super::{
     sym::Sym,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Statement {
     Let(Id, Box<Option<Expression>>, Box<Expression>),
     If(Box<Expression>, Box<Statements>, Box<Option<Statements>>),
@@ -15,26 +16,26 @@ pub enum Statement {
     Return(Box<Option<Expression>>),
 }
 impl Statement {
-    pub fn let_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(right(
-            left(unbox(Keyword::Let.matcher(ctx)), comspace()),
+    pub fn let_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+        right(
+            left(Keyword::Let, comspace()),
             map(
                 pair(
-                    left(unbox(Id::parser(ctx)), ok(comspace())),
+                    left(move |input| Id::parse(input), ok(comspace())),
                     pair(
                         ok(right(
-                            left(unbox(Sym::LSquare.matcher(ctx)), ok(comspace())),
+                            left(Sym::LSquare, ok(comspace())),
                             left(
-                                left(unbox(Expression::parser(ctx)), ok(comspace())),
-                                left(unbox(Sym::RSquare.matcher(ctx)), ok(comspace())),
+                                left(move |input| Expression::parse(input), ok(comspace())),
+                                left(Sym::RSquare, ok(comspace())),
                             ),
                         )),
                         left(
                             right(
-                                left(unbox(Sym::Equals.matcher(ctx)), ok(comspace())),
-                                left(unbox(Expression::parser(ctx)), ok(comspace())),
+                                left(Sym::Equals, ok(comspace())),
+                                left(move |input| Expression::parse(input), ok(comspace())),
                             ),
-                            unbox(Sym::Semi.matcher(ctx)),
+                            Sym::Semi,
                         ),
                     ),
                 ),
@@ -42,37 +43,38 @@ impl Statement {
                     Self::Let(var_name, Box::new(var_sub), Box::new(value))
                 },
             ),
-        ))
+        )
+        .parse(input)
     }
 
-    pub fn if_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(right(
-            left(unbox(Keyword::If.matcher(ctx)), ok(comspace())),
+    pub fn if_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+        right(
+            left(Keyword::If, ok(comspace())),
             map(
                 pair(
                     right(
-                        left(unbox(Sym::LRound.matcher(ctx)), ok(comspace())),
+                        left(Sym::LRound, ok(comspace())),
                         left(
-                            left(unbox(Expression::parser(ctx)), ok(comspace())),
-                            left(unbox(Sym::RRound.matcher(ctx)), ok(comspace())),
+                            left(move |input| Expression::parse(input), ok(comspace())),
+                            left(Sym::RRound, ok(comspace())),
                         ),
                     ),
                     pair(
                         right(
-                            left(unbox(Sym::LCurly.matcher(ctx)), ok(comspace())),
+                            left(Sym::LCurly, ok(comspace())),
                             left(
-                                left(unbox(Statements::parser(ctx)), ok(comspace())),
-                                left(unbox(Sym::RCurly.matcher(ctx)), ok(comspace())),
+                                left(move |input| Statements::parse(input), ok(comspace())),
+                                left(Sym::RCurly, ok(comspace())),
                             ),
                         ),
                         ok(right(
                             left(
-                                left(unbox(Keyword::Else.matcher(ctx)), ok(comspace())),
-                                left(unbox(Sym::LCurly.matcher(ctx)), ok(comspace())),
+                                left(Keyword::Else, ok(comspace())),
+                                left(Sym::LCurly, ok(comspace())),
                             ),
                             left(
-                                left(unbox(Statements::parser(ctx)), ok(comspace())),
-                                unbox(Sym::RCurly.matcher(ctx)),
+                                left(move |input| Statements::parse(input), ok(comspace())),
+                                Sym::RCurly,
                             ),
                         )),
                     ),
@@ -81,80 +83,90 @@ impl Statement {
                     Self::If(Box::new(condition), Box::new(stmts), Box::new(estmts))
                 },
             ),
-        ))
+        )
+        .parse(input)
     }
 
-    pub fn while_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(right(
-            left(unbox(Keyword::While.matcher(ctx)), ok(comspace())),
+    pub fn while_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+        right(
+            left(Keyword::While, ok(comspace())),
             map(
                 pair(
                     right(
-                        left(unbox(Sym::LRound.matcher(ctx)), ok(comspace())),
+                        left(Sym::LRound, ok(comspace())),
                         left(
-                            left(unbox(Expression::parser(ctx)), ok(comspace())),
-                            left(unbox(Sym::RRound.matcher(ctx)), ok(comspace())),
+                            left(move |input| Expression::parse(input), ok(comspace())),
+                            left(Sym::RRound, ok(comspace())),
                         ),
                     ),
                     right(
-                        left(unbox(Sym::LCurly.matcher(ctx)), ok(comspace())),
+                        left(Sym::LCurly, ok(comspace())),
                         left(
-                            left(unbox(Statements::parser(ctx)), ok(comspace())),
-                            left(unbox(Sym::RCurly.matcher(ctx)), ok(comspace())),
+                            left(move |input| Statements::parse(input), ok(comspace())),
+                            left(Sym::RCurly, ok(comspace())),
                         ),
                     ),
                 ),
                 |(condition, stmts)| Self::While(Box::new(condition), Box::new(stmts)),
             ),
-        ))
+        )
+        .parse(input)
     }
 
-    pub fn do_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(right(
-            left(unbox(Keyword::Do.matcher(ctx)), comspace()),
-            left(
-                left(
-                    map(unbox(SubroutineCall::parser(ctx)), |call| {
-                        Self::Do(Box::new(call))
-                    }),
-                    ok(comspace()),
-                ),
-                unbox(Sym::Semi.matcher(ctx)),
-            ),
-        ))
-    }
-
-    pub fn return_parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(right(
-            unbox(Keyword::Return.matcher(ctx)),
+    pub fn do_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+        right(
+            left(Keyword::Do, comspace()),
             left(
                 left(
                     map(
-                        ok(right(comspace(), unbox(Expression::parser(ctx)))),
+                        move |input| SubroutineCall::parse(input),
+                        |call| Self::Do(Box::new(call)),
+                    ),
+                    ok(comspace()),
+                ),
+                Sym::Semi,
+            ),
+        )
+        .parse(input)
+    }
+
+    pub fn return_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+        right(
+            Keyword::Return,
+            left(
+                left(
+                    map(
+                        ok(right(comspace(), move |input| Expression::parse(input))),
                         |expr| Self::Return(Box::new(expr)),
                     ),
                     ok(comspace()),
                 ),
-                unbox(Sym::Semi.matcher(ctx)),
+                Sym::Semi,
             ),
-        ))
+        )
+        .parse(input)
     }
 }
-impl Parseable for Statement {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(or_else(
-            unbox(Self::let_parser(ctx)),
+impl Parses<Statement> for Statement {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Statement> {
+        or_else(
+            move |input| Self::let_parser(input),
             or_else(
-                unbox(Self::if_parser(ctx)),
+                move |input| Self::if_parser(input),
                 or_else(
-                    unbox(Self::while_parser(ctx)),
-                    or_else(unbox(Self::do_parser(ctx)), unbox(Self::return_parser(ctx))),
+                    move |input| Self::while_parser(input),
+                    or_else(
+                        move |input| Self::do_parser(input),
+                        move |input| Self::return_parser(input),
+                    ),
                 ),
             ),
-        ))
+        )
+        .parse(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Statements {
     stmts: Vec<Statement>,
 }
@@ -163,11 +175,15 @@ impl Statements {
         Self { stmts }
     }
 }
-impl Parseable for Statements {
-    fn parser<'a>(ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(map(
-            range(left(unbox(Statement::parser(ctx)), ok(comspace())), 0..),
+impl Parses<Statements> for Statements {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Statements> {
+        map(
+            range(
+                left(move |input| Statement::parse(input), ok(comspace())),
+                0..,
+            ),
             |stmts| Self::new(stmts),
-        ))
+        )
+        .parse(input)
     }
 }

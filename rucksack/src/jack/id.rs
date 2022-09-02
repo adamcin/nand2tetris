@@ -20,9 +20,9 @@ impl Id {
     }
 }
 
-impl Parseable for Id {
-    fn parser<'a>(_ctx: &'a Ctx) -> Box<dyn Parser<'a, Self> + 'a> {
-        Box::new(and_then(
+impl Parses<Id> for Id {
+    fn parse<'a>(input: &'a str) -> ParseResult<'a, Id> {
+        and_then(
             map(
                 map(
                     pair(
@@ -40,7 +40,7 @@ impl Parseable for Id {
                     Ok(Id::new(s))
                 }
             },
-        ))
+        ).parse(input)
     }
 }
 
@@ -50,8 +50,7 @@ mod tests {
     use crate::parse::*;
     #[test]
     fn ids() {
-        let ctx = Ctx {};
-        let parser = Id::parser(&ctx);
+        let parser = move |input| Id::parse(input);
 
         assert_eq!(Ok(("", Id("MyClass".to_owned()))), parser.parse("MyClass"));
         assert_eq!(Err("12345"), parser.parse("12345"));
