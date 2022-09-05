@@ -113,7 +113,7 @@ pub enum Term {
     VarSub(Id, Box<Expression>),
     Expr(Box<Expression>),
     UnaryOp(Box<UnaryOp>),
-    SubroutineCall(Box<SubroutineCall>),
+    SubroutineCall(Box<Call>),
 }
 impl Term {
     pub fn int_parser<'a>(input: &'a [Token]) -> ParseResult<'a, &'a [Token], Self> {
@@ -180,7 +180,7 @@ impl Term {
     pub fn subroutine_call_parser<'a>(input: &'a [Token]) -> ParseResult<'a, &'a [Token], Self> {
         map(
             move |input| {
-                let result = SubroutineCall::parse_into(input);
+                let result = Call::parse_into(input);
                 result
             },
             |value| Self::SubroutineCall(Box::new(value)),
@@ -248,8 +248,8 @@ impl From<UnaryOp> for Term {
     }
 }
 
-impl From<SubroutineCall> for Term {
-    fn from(item: SubroutineCall) -> Self {
+impl From<Call> for Term {
+    fn from(item: Call) -> Self {
         Term::SubroutineCall(Box::new(item))
     }
 }
@@ -358,8 +358,8 @@ impl From<UnaryOp> for Expression {
     }
 }
 
-impl From<SubroutineCall> for Expression {
-    fn from(item: SubroutineCall) -> Self {
+impl From<Call> for Expression {
+    fn from(item: Call) -> Self {
         Expression::new(item.into(), Vec::new())
     }
 }
@@ -406,12 +406,12 @@ impl From<Expression> for ExpressionList {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SubroutineCall {
+pub struct Call {
     qualifier: Option<Id>,
     name: Id,
     exprs: ExpressionList,
 }
-impl SubroutineCall {
+impl Call {
     pub fn new(qualifier: Option<Id>, name: Id, exprs: ExpressionList) -> Self {
         Self {
             qualifier,
@@ -437,7 +437,7 @@ impl SubroutineCall {
     }
 }
 
-impl<'a> Parses<'a> for SubroutineCall {
+impl<'a> Parses<'a> for Call {
     type Input = &'a [Token];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         map(
@@ -560,7 +560,7 @@ mod tests {
     fn term_call_parser() {
         let cases = vec![(
             "a_function()",
-            Ok(Term::SubroutineCall(Box::new(SubroutineCall::new(
+            Ok(Term::SubroutineCall(Box::new(Call::new(
                 None,
                 Id::new("a_function".to_owned()),
                 ExpressionList::new(Vec::new()),
@@ -586,7 +586,7 @@ mod tests {
             r"index < values.size()",
             Ok((
                 Id::from("index").into(),
-                Op::Lt(SubroutineCall::new_qual(Id::from("values"), Id::from("size")).into()),
+                Op::Lt(Call::new_qual(Id::from("values"), Id::from("size")).into()),
             )
                 .into()),
         )];

@@ -1,5 +1,6 @@
 use crate::parse::*;
 
+use super::common::XmlFormattable;
 use super::id::Id;
 use super::keyword::Keyword;
 use super::subroutine::*;
@@ -107,7 +108,7 @@ mod tests {
     use super::*;
     use crate::jack::{
         common::testutil::{assert_tokens, transform_result},
-        expression::{Op, SubroutineCall},
+        expression::{Op, Call},
         statement::Statement,
         token::{IntConst, StringConst},
     };
@@ -202,7 +203,7 @@ mod tests {
                             vec![
                                 Statement::new_let_var(
                                     Id::from("length"),
-                                    SubroutineCall::new_qual_params(
+                                    Call::new_qual_params(
                                         Id::from("Keyboard"),
                                         Id::from("readInt"),
                                         vec![StringConst::from("How many numbers? ").into()].into(),
@@ -211,7 +212,7 @@ mod tests {
                                 ),
                                 Statement::new_let_var(
                                     Id::from("a"),
-                                    SubroutineCall::new_qual_params(
+                                    Call::new_qual_params(
                                         Id::from("Array"),
                                         Id::from("new"),
                                         vec![Id::from("length").into()].into(),
@@ -226,7 +227,7 @@ mod tests {
                                             Statement::new_let_var_sub(
                                                 Id::from("a"),
                                                 Id::from("i").into(),
-                                                SubroutineCall::new_qual_params(
+                                                Call::new_qual_params(
                                                     Id::from("Keyboard"),
                                                     Id::from("readInt"),
                                                     vec![StringConst::from("How many numbers? ")
@@ -254,12 +255,12 @@ mod tests {
                                         ]
                                     .into(),
                                 ),
-                                Statement::new_do(SubroutineCall::new_qual_params(
+                                Statement::new_do(Call::new_qual_params(
                                     Id::from("Output"),
                                     Id::from("printString"),
                                     vec![StringConst::from("The average is ").into()].into(),
                                 )),
-                                Statement::new_do(SubroutineCall::new_qual_params(
+                                Statement::new_do(Call::new_qual_params(
                                     Id::from("Output"),
                                     Id::from("printInt"),
                                     vec![(

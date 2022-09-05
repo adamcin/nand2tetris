@@ -1,7 +1,7 @@
 use crate::parse::*;
 
 use super::{
-    expression::{Expression, KeywordConst, SubroutineCall, Term},
+    expression::{Expression, KeywordConst, Call, Term},
     id::Id,
     keyword::Keyword,
     sym::Sym,
@@ -13,7 +13,7 @@ pub enum Statement {
     Let(Id, Box<Option<Expression>>, Box<Expression>),
     If(Box<Expression>, Box<Statements>, Box<Option<Statements>>),
     While(Box<Expression>, Box<Statements>),
-    Do(Box<SubroutineCall>),
+    Do(Box<Call>),
     Return(Box<Option<Expression>>),
 }
 impl Statement {
@@ -41,7 +41,7 @@ impl Statement {
         Self::While(Box::new(condition), Box::new(block))
     }
 
-    pub fn new_do(call: SubroutineCall) -> Self {
+    pub fn new_do(call: Call) -> Self {
         Self::Do(Box::new(call))
     }
 
@@ -138,7 +138,7 @@ impl Statement {
             Keyword::Do,
             left(
                 map(
-                    move |input| SubroutineCall::parse_into(input),
+                    move |input| Call::parse_into(input),
                     |call| Self::Do(Box::new(call)),
                 ),
                 Sym::Semi,
@@ -214,7 +214,7 @@ impl From<Statement> for Statements {
 mod tests {
     use crate::jack::{
         common::testutil::{assert_tokens, transform_result},
-        expression::{Op, SubroutineCall, Term},
+        expression::{Op, Call, Term},
         statement::Statement,
         token::IntConst,
     };
@@ -238,7 +238,7 @@ mod tests {
             Ok(Statement::new_while(
                 (
                     Id::from("index").into(),
-                    Op::Lt(SubroutineCall::new_qual(Id::from("values"), Id::from("size")).into()),
+                    Op::Lt(Call::new_qual(Id::from("values"), Id::from("size")).into()),
                 )
                     .into(),
                 vec![
@@ -247,7 +247,7 @@ mod tests {
                         (
                             Id::from("total").into(),
                             Op::Plus(
-                                SubroutineCall::new_qual_params(
+                                Call::new_qual_params(
                                     Id::from("values"),
                                     Id::from("get"),
                                     vec![Id::from("index").into()].into(),

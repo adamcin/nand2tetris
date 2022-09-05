@@ -306,7 +306,7 @@ impl<'a> Parses<'a> for SubroutineDec {
 mod tests {
     use crate::jack::{
         common::testutil::{assert_tokens, transform_result},
-        expression::{Op, SubroutineCall, Term},
+        expression::{Op, Call, Term},
         statement::Statement,
         token::IntConst,
     };
@@ -367,7 +367,7 @@ mod tests {
                                 (
                                     Id::from("index").into(),
                                     Op::Lt(
-                                        SubroutineCall::new_qual(
+                                        Call::new_qual(
                                             Id::from("values"),
                                             Id::from("size"),
                                         )
@@ -381,7 +381,7 @@ mod tests {
                                         (
                                             Id::from("total").into(),
                                             Op::Plus(
-                                                SubroutineCall::new_qual_params(
+                                                Call::new_qual_params(
                                                     Id::from("values"),
                                                     Id::from("get"),
                                                     vec![Id::from("index").into()].into(),

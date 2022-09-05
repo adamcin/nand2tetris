@@ -22,6 +22,8 @@ impl Id {
     fn is_ident(c: &char) -> bool {
         Self::is_ident_lead(c) || c.is_ascii_digit()
     }
+
+    pub fn as_str<'a>(&'a self) -> &'a str { &self.0 }
 }
 
 impl From<&str> for Id {
