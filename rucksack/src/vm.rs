@@ -1148,8 +1148,8 @@ impl VMParser {
     }
 }
 
-impl<'a> Parser<'a, Vec<VMLine>> for VMParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Vec<VMLine>> {
+impl<'a> Parser<'a, &'a str, Vec<VMLine>> for VMParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, Vec<VMLine>> {
         range(
             right(
                 space0(),
@@ -1529,9 +1529,9 @@ impl Display for VMLine {
 }
 pub struct VMLineParser {}
 
-impl<'a> Parser<'a, VMLine> for VMLineParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, VMLine> {
-        let init_parser: Box<dyn Parser<'a, VMLine>> = Box::new(right(
+impl<'a> Parser<'a, &'a str, VMLine> for VMLineParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, VMLine> {
+        let init_parser: Box<dyn Parser<'a, &'a str, VMLine>> = Box::new(right(
             match_literal("//"),
             map(non_nl0(), |text| {
                 VMLine::Comment(text.into_iter().collect())
@@ -1540,7 +1540,7 @@ impl<'a> Parser<'a, VMLine> for VMLineParser {
 
         Command::all()
             .iter()
-            .fold(init_parser, |acc, cmd| -> Box<dyn Parser<VMLine>> {
+            .fold(init_parser, |acc, cmd| -> Box<dyn Parser<&str, VMLine>> {
                 let trail_comment = right(pad0(), ok(right(match_literal("//"), non_nl0())));
                 if cmd.args_needed() == 0 {
                     let parser = and_then(match_literal(cmd.as_str()), |()| VMLine::from_0arg(cmd));

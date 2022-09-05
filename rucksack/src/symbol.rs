@@ -66,8 +66,8 @@ impl SymbolParser {
     }
 }
 
-impl<'a> Parser<'a, Symbol> for SymbolParser {
-    fn parse(&self, input: &'a str) -> crate::parse::ParseResult<'a, Symbol> {
+impl<'a> Parser<'a, &'a str, Symbol> for SymbolParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, Symbol> {
         map(
             map(
                 or_else(

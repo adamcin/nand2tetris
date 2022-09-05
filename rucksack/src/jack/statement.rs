@@ -1,10 +1,11 @@
 use crate::parse::*;
 
 use super::{
-    expression::{Expression, SubroutineCall},
+    expression::{Expression, KeywordConst, SubroutineCall, Term},
     id::Id,
     keyword::Keyword,
     sym::Sym,
+    token::Token,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,25 +17,62 @@ pub enum Statement {
     Return(Box<Option<Expression>>),
 }
 impl Statement {
-    pub fn let_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+    pub fn new_let_var(var_name: Id, expr: Expression) -> Self {
+        Self::Let(var_name, Box::new(None), Box::new(expr))
+    }
+
+    pub fn new_let_var_sub(var_name: Id, sub_expr: Expression, expr: Expression) -> Self {
+        Self::Let(var_name, Box::new(Some(sub_expr)), Box::new(expr))
+    }
+
+    pub fn new_if(condition: Expression, block: Statements) -> Self {
+        Self::If(Box::new(condition), Box::new(block), Box::new(None))
+    }
+
+    pub fn new_if_else(condition: Expression, block: Statements, else_block: Statements) -> Self {
+        Self::If(
+            Box::new(condition),
+            Box::new(block),
+            Box::new(Some(else_block)),
+        )
+    }
+
+    pub fn new_while(condition: Expression, block: Statements) -> Self {
+        Self::While(Box::new(condition), Box::new(block))
+    }
+
+    pub fn new_do(call: SubroutineCall) -> Self {
+        Self::Do(Box::new(call))
+    }
+
+    pub fn new_return_void() -> Self {
+        Self::Return(Box::new(None))
+    }
+
+    pub fn new_return_this() -> Self {
+        Self::Return(Box::new(Some(Expression::new(
+            Term::KeywordConst(KeywordConst::This),
+            Vec::new(),
+        ))))
+    }
+
+    pub fn new_return(value: Expression) -> Self {
+        Self::Return(Box::new(Some(value)))
+    }
+
+    pub fn let_parser<'a>(input: &'a [Token]) -> ParseResult<'a, &'a [Token], Self> {
         right(
-            left(Keyword::Let, comspace()),
+            Keyword::Let,
             map(
                 pair(
-                    left(move |input| Id::parse(input), ok(comspace())),
+                    move |input| Token::id(input),
                     pair(
                         ok(right(
-                            left(Sym::LSquare, ok(comspace())),
-                            left(
-                                left(move |input| Expression::parse(input), ok(comspace())),
-                                left(Sym::RSquare, ok(comspace())),
-                            ),
+                            Sym::LSquare,
+                            left(move |input| Expression::parse_into(input), Sym::RSquare),
                         )),
                         left(
-                            right(
-                                left(Sym::Equals, ok(comspace())),
-                                left(move |input| Expression::parse(input), ok(comspace())),
-                            ),
+                            right(Sym::Equals, move |input| Expression::parse_into(input)),
                             Sym::Semi,
                         ),
                     ),
@@ -47,35 +85,23 @@ impl Statement {
         .parse(input)
     }
 
-    pub fn if_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+    pub fn if_parser<'a>(input: &'a [Token]) -> ParseResult<'a, &'a [Token], Self> {
         right(
-            left(Keyword::If, ok(comspace())),
+            Keyword::If,
             map(
                 pair(
                     right(
-                        left(Sym::LRound, ok(comspace())),
-                        left(
-                            left(move |input| Expression::parse(input), ok(comspace())),
-                            left(Sym::RRound, ok(comspace())),
-                        ),
+                        Sym::LRound,
+                        left(move |input| Expression::parse_into(input), Sym::RRound),
                     ),
                     pair(
                         right(
-                            left(Sym::LCurly, ok(comspace())),
-                            left(
-                                left(move |input| Statements::parse(input), ok(comspace())),
-                                left(Sym::RCurly, ok(comspace())),
-                            ),
+                            Sym::LCurly,
+                            left(move |input| Statements::parse_into(input), Sym::RCurly),
                         ),
                         ok(right(
-                            left(
-                                left(Keyword::Else, ok(comspace())),
-                                left(Sym::LCurly, ok(comspace())),
-                            ),
-                            left(
-                                left(move |input| Statements::parse(input), ok(comspace())),
-                                Sym::RCurly,
-                            ),
+                            left(Keyword::Else, Sym::LCurly),
+                            left(move |input| Statements::parse_into(input), Sym::RCurly),
                         )),
                     ),
                 ),
@@ -87,24 +113,18 @@ impl Statement {
         .parse(input)
     }
 
-    pub fn while_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+    pub fn while_parser<'a>(input: &'a [Token]) -> ParseResult<'a, &'a [Token], Self> {
         right(
-            left(Keyword::While, ok(comspace())),
+            Keyword::While,
             map(
                 pair(
                     right(
-                        left(Sym::LRound, ok(comspace())),
-                        left(
-                            left(move |input| Expression::parse(input), ok(comspace())),
-                            left(Sym::RRound, ok(comspace())),
-                        ),
+                        Sym::LRound,
+                        left(move |input| Expression::parse_into(input), Sym::RRound),
                     ),
                     right(
-                        left(Sym::LCurly, ok(comspace())),
-                        left(
-                            left(move |input| Statements::parse(input), ok(comspace())),
-                            left(Sym::RCurly, ok(comspace())),
-                        ),
+                        Sym::LCurly,
+                        left(move |input| Statements::parse_into(input), Sym::RCurly),
                     ),
                 ),
                 |(condition, stmts)| Self::While(Box::new(condition), Box::new(stmts)),
@@ -113,16 +133,13 @@ impl Statement {
         .parse(input)
     }
 
-    pub fn do_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+    pub fn do_parser<'a>(input: &'a [Token]) -> ParseResult<'a, &'a [Token], Self> {
         right(
-            left(Keyword::Do, comspace()),
+            Keyword::Do,
             left(
-                left(
-                    map(
-                        move |input| SubroutineCall::parse(input),
-                        |call| Self::Do(Box::new(call)),
-                    ),
-                    ok(comspace()),
+                map(
+                    move |input| SubroutineCall::parse_into(input),
+                    |call| Self::Do(Box::new(call)),
                 ),
                 Sym::Semi,
             ),
@@ -130,25 +147,22 @@ impl Statement {
         .parse(input)
     }
 
-    pub fn return_parser<'a>(input: &'a str) -> ParseResult<'a, Self> {
+    pub fn return_parser<'a>(input: &'a [Token]) -> ParseResult<'a, &'a [Token], Self> {
         right(
             Keyword::Return,
             left(
-                left(
-                    map(
-                        ok(right(comspace(), move |input| Expression::parse(input))),
-                        |expr| Self::Return(Box::new(expr)),
-                    ),
-                    ok(comspace()),
-                ),
+                map(ok(move |input| Expression::parse_into(input)), |expr| {
+                    Self::Return(Box::new(expr))
+                }),
                 Sym::Semi,
             ),
         )
         .parse(input)
     }
 }
-impl Parses<Statement> for Statement {
-    fn parse<'a>(input: &'a str) -> ParseResult<'a, Statement> {
+impl<'a> Parses<'a> for Statement {
+    type Input = &'a [Token];
+    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         or_else(
             move |input| Self::let_parser(input),
             or_else(
@@ -175,15 +189,82 @@ impl Statements {
         Self { stmts }
     }
 }
-impl Parses<Statements> for Statements {
-    fn parse<'a>(input: &'a str) -> ParseResult<'a, Statements> {
+impl<'a> Parses<'a> for Statements {
+    type Input = &'a [Token];
+    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         map(
-            range(
-                left(move |input| Statement::parse(input), ok(comspace())),
-                0..,
-            ),
+            range(move |input| Statement::parse_into(input), 0..),
             |stmts| Self::new(stmts),
         )
         .parse(input)
+    }
+}
+impl From<Vec<Statement>> for Statements {
+    fn from(items: Vec<Statement>) -> Self {
+        Statements::new(items)
+    }
+}
+
+impl From<Statement> for Statements {
+    fn from(item: Statement) -> Self {
+        Statements::new(vec![item])
+    }
+}
+#[cfg(test)]
+mod tests {
+    use crate::jack::{
+        common::testutil::{assert_tokens, transform_result},
+        expression::{Op, SubroutineCall, Term},
+        statement::Statement,
+        token::IntConst,
+    };
+
+    use super::*;
+
+    fn token_result(tokens: &[Token]) -> Result<Statement, Option<Token>> {
+        let parser = Statement::parse_into;
+        transform_result(parser.parse(tokens))
+    }
+
+    #[test]
+    fn parsing() {
+        let cases = vec![(
+            r"
+            while(index < values.size()) {
+                let total = total + values.get(index);
+                let index = index + 1;
+            }
+            ",
+            Ok(Statement::new_while(
+                (
+                    Id::from("index").into(),
+                    Op::Lt(SubroutineCall::new_qual(Id::from("values"), Id::from("size")).into()),
+                )
+                    .into(),
+                vec![
+                    Statement::new_let_var(
+                        Id::from("total"),
+                        (
+                            Id::from("total").into(),
+                            Op::Plus(
+                                SubroutineCall::new_qual_params(
+                                    Id::from("values"),
+                                    Id::from("get"),
+                                    vec![Id::from("index").into()].into(),
+                                )
+                                .into(),
+                            ),
+                        )
+                            .into(),
+                    ),
+                    Statement::new_let_var(
+                        Id::from("index"),
+                        (Id::from("index").into(), Op::Plus(IntConst::one().into())).into(),
+                    ),
+                ]
+                .into(),
+            )),
+        )];
+        assert_tokens(cases, token_result);
     }
 }

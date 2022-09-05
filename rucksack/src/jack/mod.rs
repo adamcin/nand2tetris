@@ -1,10 +1,13 @@
-mod atoms;
 mod class;
+mod common;
 mod expression;
 mod id;
 mod keyword;
 mod statement;
+mod subroutine;
 mod sym;
+mod token;
+mod typea;
 use std::io::Error;
 
 use crate::common::{err_invalid_input, Unit, UnitFactory};
@@ -13,21 +16,12 @@ use crate::parse::*;
 use self::class::Class;
 use self::id::Id;
 use self::keyword::Keyword;
+use self::token::TokenStream;
 
 pub struct JackParser {}
 impl<'c> JackParser {
     pub fn new() -> Self {
         Self {}
-    }
-}
-
-impl<'a> Parser<'a, Class> for JackParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Class> {
-        right(
-            ok(comspace()),
-            left(move |input| Class::parse(input), ok(comspace())),
-        )
-        .parse(input)
     }
 }
 
@@ -44,11 +38,12 @@ impl Unit for JackUnit {
 
     fn parse<'a>(&'a self) -> Result<Self::Syntax, Error> {
         let source = std::fs::read_to_string(self.src_path())?;
-        let parser = JackParser::new();
-        let result = parser.parse(source.as_str());
+        let (_str_rem, stream) = TokenStream::parse_into(source.as_str()).expect("must work");
+        let parser = move |input| Class::parse_into(input);
+        let result = parser.parse(stream.tokens());
         match result {
             Ok((_rem, parsed)) => Ok(parsed),
-            Err(error_at) => Err(err_invalid_input(format!("parse error at: {}", error_at))),
+            Err(error_at) => Err(err_invalid_input(format!("parse error at: {:?}", error_at))),
         }
     }
 }

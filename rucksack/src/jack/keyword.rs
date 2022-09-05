@@ -1,5 +1,7 @@
 use crate::parse::*;
 
+use super::token::Token;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keyword {
     Class,
@@ -81,11 +83,44 @@ impl Keyword {
     pub fn is_reserved(token: &str) -> bool {
         Self::all().iter().any(|k| k.as_str() == token)
     }
+
+    pub fn as_token(self) -> Token {
+        Token::Keyword(self)
+    }
 }
 
-impl<'a> Parser<'a, Keyword> for Keyword {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Keyword> {
+impl<'a> Parser<'a, &'a str, Keyword> for Keyword {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, Keyword> {
         map(match_literal(self.as_str()), |()| *self).parse(input)
+    }
+}
+
+impl<'a> Parser<'a, &'a [Token], Keyword> for Keyword {
+    fn parse(&self, input: &'a [Token]) -> ParseResult<'a, &'a [Token], Keyword> {
+        match input.split_first() {
+            Some((Token::Keyword(value), rem)) if value == self => Ok((rem, *self)),
+            _ => Err(input),
+        }
+    }
+}
+
+impl<'a> Parses<'a> for Keyword {
+    type Input = &'a str;
+    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    where
+        Self::Input: 'a,
+    {
+        let init_parser: Box<dyn Parser<'a, &'a str, Self>> = Box::new(none());
+
+        Self::all()
+            .iter()
+            .fold(init_parser, |acc, keyword| -> Box<dyn Parser<&str, Self>> {
+                Box::new(or_else(
+                    move |input| keyword.parse(input),
+                    move |input| acc.parse(input),
+                ))
+            })
+            .parse(input)
     }
 }
 

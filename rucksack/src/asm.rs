@@ -157,8 +157,8 @@ impl Display for Comp {
 
 pub struct CompParser {}
 
-impl<'a> Parser<'a, Comp> for CompParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Comp> {
+impl<'a> Parser<'a, &'a str, Comp> for CompParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, Comp> {
         match (1..=3)
             .rev()
             .filter(|&len| input.len() >= len)
@@ -265,8 +265,8 @@ impl Dest {
 
 pub struct DestParser {}
 
-impl<'a> Parser<'a, Dest> for DestParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Dest> {
+impl<'a> Parser<'a, &'a str, Dest> for DestParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, Dest> {
         map(
             left(
                 range(
@@ -358,8 +358,8 @@ impl Display for Jump {
 
 pub struct JumpParser {}
 
-impl<'a> Parser<'a, Jump> for JumpParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Jump> {
+impl<'a> Parser<'a, &'a str, Jump> for JumpParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, Jump> {
         match (3..=3)
             .filter(|&len| input.len() >= len)
             .map(|bound| -> Jump { (&input[0..bound]).into() })
@@ -451,8 +451,8 @@ impl Display for ASMLine {
 
 pub struct ASMLineParser {}
 
-impl<'a> Parser<'a, ASMLine> for ASMLineParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, ASMLine> {
+impl<'a> Parser<'a, &'a str, ASMLine> for ASMLineParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, ASMLine> {
         or_else(
             right(
                 match_literal("@"),
@@ -597,8 +597,8 @@ impl Unit for HackUnit {
 
 pub struct HackParser {}
 
-impl<'a> Parser<'a, Vec<String>> for HackParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Vec<String>> {
+impl<'a> Parser<'a, &'a str, Vec<String>> for HackParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, Vec<String>> {
         unimplemented!()
     }
 }
@@ -807,8 +807,8 @@ impl<'p> Debug for SecondPass {
 
 pub struct ASMParser {}
 
-impl<'a> Parser<'a, Vec<ASMLine>> for ASMParser {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Vec<ASMLine>> {
+impl<'a> Parser<'a, &'a str, Vec<ASMLine>> for ASMParser {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, &'a str, Vec<ASMLine>> {
         range(
             right(
                 space0(),

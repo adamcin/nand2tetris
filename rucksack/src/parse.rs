@@ -1,26 +1,30 @@
-use std::ops::RangeBounds;
+use std::{fmt::Debug, ops::RangeBounds};
 
-pub type ParseResult<'a, Output> = Result<(&'a str, Output), &'a str>;
-pub trait Parser<'a, Output> {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Output>;
+pub type ParseResult<'a, Input, Output> = Result<(Input, Output), Input>;
+
+pub trait Parser<'a, Input, Output> {
+    fn parse(&self, input: Input) -> ParseResult<'a, Input, Output>;
 }
 
-pub trait Parses<Output> {
-    fn parse<'a>(input: &'a str) -> ParseResult<'a, Output>;
+pub trait Parses<'a>: Sized {
+    type Input;
+    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    where
+        Self::Input: 'a;
 }
 
-impl<'a, F, Output> Parser<'a, Output> for F
+impl<'a, F, Input, Output> Parser<'a, Input, Output> for F
 where
-    F: Fn(&'a str) -> ParseResult<Output>,
+    F: Fn(Input) -> ParseResult<'a, Input, Output>,
 {
-    fn parse(&self, input: &'a str) -> ParseResult<'a, Output> {
+    fn parse(&self, input: Input) -> ParseResult<'a, Input, Output> {
         self(input)
     }
 }
 
-pub fn map<'a, P, F, A, B>(p: P, map_fn: F) -> impl Parser<'a, B>
+pub fn map<'a, P, F, I, A, B>(p: P, map_fn: F) -> impl Parser<'a, I, B>
 where
-    P: Parser<'a, A>,
+    P: Parser<'a, I, A>,
     F: Fn(A) -> B,
 {
     move |input| {
@@ -29,12 +33,12 @@ where
     }
 }
 
-pub fn and_then<'a, P, F, A, B, E>(p: P, map_fn: F) -> impl Parser<'a, B>
+pub fn and_then<'a, P, F, I: 'a + ?Sized, A, B, E>(p: P, map_fn: F) -> impl Parser<'a, &'a I, B>
 where
-    P: Parser<'a, A>,
+    P: Parser<'a, &'a I, A>,
     F: Fn(A) -> Result<B, E>,
 {
-    move |input| {
+    move |input: &'a I| {
         p.parse(input)
             .and_then(|(next_input, result)| match map_fn(result) {
                 Ok(result) => Ok((next_input, result)),
@@ -43,61 +47,67 @@ where
     }
 }
 
-pub fn pair<'a, P1, P2, R1, R2>(left: P1, right: P2) -> impl Parser<'a, (R1, R2)>
+pub fn pair<'a, P1, P2, I: 'a + ?Sized, R1, R2>(
+    left: P1,
+    right: P2,
+) -> impl Parser<'a, &'a I, (R1, R2)>
 where
-    P1: Parser<'a, R1>,
-    P2: Parser<'a, R2>,
+    P1: Parser<'a, &'a I, R1>,
+    P2: Parser<'a, &'a I, R2>,
 {
     move |input| {
         left.parse(input).and_then(|(next_input, result1)| {
             right
                 .parse(next_input)
+                .map_err(|_| input)
                 .map(|(last_input, result2)| (last_input, (result1, result2)))
         })
     }
 }
 
-pub fn ok<'a, P, R>(p: P) -> impl Parser<'a, Option<R>>
+pub fn ok<'a, P, I: 'a + ?Sized + Debug, R>(p: P) -> impl Parser<'a, &'a I, Option<R>>
 where
-    P: Parser<'a, R>,
+    P: Parser<'a, &'a I, R>,
 {
-    move |input| match p.parse(input).ok() {
-        Some((remaining, output)) => Ok((remaining, Some(output))),
-        None => Ok((input, None)),
+    move |input| {
+        match p.parse(input).ok() {
+            Some((remaining, output)) => Ok((remaining, Some(output))),
+            None => Ok((input, None)),
+        }
     }
 }
 
-pub fn or_else<'a, P1, P2, R>(p: P1, elze: P2) -> impl Parser<'a, R>
+pub fn or_else<'a, P1, P2, I, R>(p: P1, elze: P2) -> impl Parser<'a, I, R>
 where
-    P1: Parser<'a, R>,
-    P2: Parser<'a, R>,
+    P1: Parser<'a, I, R>,
+    P2: Parser<'a, I, R>,
 {
-    move |input| p.parse(input).or_else(|next_input| elze.parse(next_input))
+    move |input| p.parse(input).or_else(|input| elze.parse(input))
 }
 
-pub fn none<'a, R>() -> impl Parser<'a, R> {
+pub fn none<'a, I, R>() -> impl Parser<'a, I, R> {
     move |input| Err(input)
 }
 
-pub fn left<'a, P1, P2, R1, R2>(left: P1, r: P2) -> impl Parser<'a, R1>
+pub fn left<'a, P1, P2, I: 'a + ?Sized, R1, R2>(left: P1, r: P2) -> impl Parser<'a, &'a I, R1>
 where
-    P1: Parser<'a, R1>,
-    P2: Parser<'a, R2>,
+    P1: Parser<'a, &'a I, R1>,
+    P2: Parser<'a, &'a I, R2>,
 {
     map(pair(left, r), |(left, _right)| left)
 }
 
-pub fn right<'a, P1, P2, R1, R2>(l: P1, right: P2) -> impl Parser<'a, R2>
+pub fn right<'a, P1, P2, I: 'a + ?Sized, R1, R2>(l: P1, right: P2) -> impl Parser<'a, &'a I, R2>
 where
-    P1: Parser<'a, R1>,
-    P2: Parser<'a, R2>,
+    P1: Parser<'a, &'a I, R1>,
+    P2: Parser<'a, &'a I, R2>,
 {
     map(pair(l, right), |(_left, right)| right)
 }
 
-pub fn pred<'a, P, A, F>(p: P, pred: F) -> impl Parser<'a, A>
+pub fn pred<'a, P, I: 'a + ?Sized, A, F>(p: P, pred: F) -> impl Parser<'a, &'a I, A>
 where
-    P: Parser<'a, A>,
+    P: Parser<'a, &'a I, A>,
     F: Fn(&A) -> bool,
 {
     move |input| {
@@ -110,10 +120,10 @@ where
     }
 }
 
-pub fn range<'a, P, A, B>(p: P, bounds: B) -> impl Parser<'a, Vec<A>>
+pub fn range<'a, P, I: 'a + ?Sized, A, B>(p: P, bounds: B) -> impl Parser<'a, &'a I, Vec<A>>
 where
     B: RangeBounds<usize>,
-    P: Parser<'a, A>,
+    P: Parser<'a, &'a I, A>,
 {
     move |mut input| {
         let mut result = Vec::new();
@@ -131,20 +141,20 @@ where
     }
 }
 
-pub fn not<'a, P, A>(p: P) -> impl Parser<'a, ()>
+pub fn not<'a, P, I: 'a + ?Sized, A>(p: P) -> impl Parser<'a, &'a I, ()>
 where
-    P: Parser<'a, A>,
+    P: Parser<'a, &'a I, A>,
 {
-    move |input: &'a str| match p.parse(input) {
+    move |input| match p.parse(input) {
         Ok(_) => Err(input),
         Err(_) => Ok((input, ())),
     }
 }
 
-pub fn until<'a, 'u, P, A, B>(p: P, bounds: B, until: &'u str) -> impl Parser<'a, Vec<A>>
+pub fn until<'a, 'u, P, A, B>(p: P, bounds: B, until: &'u str) -> impl Parser<'a, &'a str, Vec<A>>
 where
     B: RangeBounds<usize>,
-    P: Parser<'a, A>,
+    P: Parser<'a, &'a str, A>,
     'u: 'a,
 {
     let parser = right(not(match_literal(until)), p);
@@ -164,10 +174,10 @@ where
     }
 }
 
-pub fn peek<'a, A, F, P>(count: usize, pred: F, opt_p: P) -> impl Parser<'a, Option<A>>
+pub fn peek<'a, A, F, P>(count: usize, pred: F, opt_p: P) -> impl Parser<'a, &'a str, Option<A>>
 where
-    F: Parser<'a, bool>,
-    P: Parser<'a, A>,
+    F: Parser<'a, &'a str, bool>,
+    P: Parser<'a, &'a str, A>,
 {
     move |input: &'a str| match pred.parse(&input[0..count.min(input.len())]).ok() {
         Some((_, true)) => opt_p
@@ -177,21 +187,21 @@ where
     }
 }
 
-pub fn zero_or_more<'a, P, A>(p: P) -> impl Parser<'a, Vec<A>>
+pub fn zero_or_more<'a, P, I: 'a + ?Sized, A>(p: P) -> impl Parser<'a, &'a I, Vec<A>>
 where
-    P: Parser<'a, A>,
+    P: Parser<'a, &'a I, A>,
 {
     range(p, 0..)
 }
 
-pub fn one_or_more<'a, P, A>(p: P) -> impl Parser<'a, Vec<A>>
+pub fn one_or_more<'a, P, I: 'a + ?Sized, A>(p: P) -> impl Parser<'a, &'a I, Vec<A>>
 where
-    P: Parser<'a, A>,
+    P: Parser<'a, &'a I, A>,
 {
     range(p, 1..)
 }
 
-pub fn match_literal<'a, 'b>(expected: &'b str) -> impl Parser<'a, ()>
+pub fn match_literal<'a, 'b>(expected: &'b str) -> impl Parser<'a, &'a str, ()>
 where
     'b: 'a,
 {
@@ -201,14 +211,14 @@ where
     }
 }
 
-pub fn any_char(input: &str) -> ParseResult<char> {
+pub fn any_char(input: &str) -> ParseResult<&str, char> {
     match input.chars().next() {
         Some(next) => Ok((&input[next.len_utf8()..], next)),
         _ => Err(input),
     }
 }
 
-pub fn eof(input: &str) -> ParseResult<()> {
+pub fn eof(input: &str) -> ParseResult<&str, ()> {
     if input.is_empty() {
         Ok((input, ()))
     } else {
@@ -216,39 +226,39 @@ pub fn eof(input: &str) -> ParseResult<()> {
     }
 }
 
-pub fn whitespace_char<'a>() -> impl Parser<'a, char> {
+pub fn whitespace_char<'a>() -> impl Parser<'a, &'a str, char> {
     pred(any_char, |c| c.is_whitespace())
 }
 
-pub fn inlinespace_char<'a>() -> impl Parser<'a, char> {
+pub fn inlinespace_char<'a>() -> impl Parser<'a, &'a str, char> {
     pred(any_char, |c| c.is_whitespace() && c != &'\n' && c != &'\r')
 }
 
-pub fn non_nl_char<'a>() -> impl Parser<'a, char> {
+pub fn non_nl_char<'a>() -> impl Parser<'a, &'a str, char> {
     pred(any_char, |c| c != &'\n' && c != &'\r')
 }
 
-pub fn space1<'a>() -> impl Parser<'a, Vec<char>> {
+pub fn space1<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
     one_or_more(whitespace_char())
 }
 
-pub fn space0<'a>() -> impl Parser<'a, Vec<char>> {
+pub fn space0<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
     zero_or_more(whitespace_char())
 }
 
-pub fn pad1<'a>() -> impl Parser<'a, Vec<char>> {
+pub fn pad1<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
     one_or_more(inlinespace_char())
 }
 
-pub fn pad0<'a>() -> impl Parser<'a, Vec<char>> {
+pub fn pad0<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
     zero_or_more(inlinespace_char())
 }
 
-pub fn digit_char<'a>() -> impl Parser<'a, char> {
+pub fn digit_char<'a>() -> impl Parser<'a, &'a str, char> {
     pred(any_char, |c| c.is_digit(10))
 }
 
-pub fn i16_literal<'a>() -> impl Parser<'a, i16> {
+pub fn i16_literal<'a>() -> impl Parser<'a, &'a str, i16> {
     and_then(
         pair(ok(pred(any_char, |c| c == &'-')), range(digit_char(), 0..)),
         |(neg, digits)| {
@@ -261,15 +271,15 @@ pub fn i16_literal<'a>() -> impl Parser<'a, i16> {
     )
 }
 
-pub fn newline<'a>() -> impl Parser<'a, ()> {
+pub fn newline<'a>() -> impl Parser<'a, &'a str, ()> {
     or_else(eof, or_else(match_literal("\r\n"), match_literal("\n")))
 }
 
-pub fn non_nl0<'a>() -> impl Parser<'a, Vec<char>> {
+pub fn non_nl0<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
     zero_or_more(non_nl_char())
 }
 
-pub fn inline_comment<'a>() -> impl Parser<'a, String> {
+pub fn inline_comment<'a>() -> impl Parser<'a, &'a str, String> {
     right(
         match_literal("//"),
         left(
@@ -281,7 +291,7 @@ pub fn inline_comment<'a>() -> impl Parser<'a, String> {
     )
 }
 
-pub fn block_comment<'a>() -> impl Parser<'a, String> {
+pub fn block_comment<'a>() -> impl Parser<'a, &'a str, String> {
     right(
         match_literal("/*"),
         left(
@@ -293,14 +303,14 @@ pub fn block_comment<'a>() -> impl Parser<'a, String> {
     )
 }
 
-pub fn drop<'a, A, P>(p: P) -> impl Parser<'a, ()>
+pub fn drop<'a, A, I, P>(p: P) -> impl Parser<'a, I, ()>
 where
-    P: Parser<'a, A>,
+    P: Parser<'a, I, A>,
 {
     map(p, |_| ())
 }
 
-pub fn comspace<'a>() -> impl Parser<'a, ()> {
+pub fn comspace<'a>() -> impl Parser<'a, &'a str, ()> {
     drop(range(
         or_else(
             drop(space1()),

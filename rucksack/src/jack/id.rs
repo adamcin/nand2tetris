@@ -11,6 +11,10 @@ impl Id {
         Self(value)
     }
 
+    pub fn copy(&self) -> Self {
+        Self::new(self.0.to_owned())
+    }
+
     fn is_ident_lead(c: &char) -> bool {
         c.is_ascii_alphabetic() || c == &'_'
     }
@@ -20,8 +24,15 @@ impl Id {
     }
 }
 
-impl Parses<Id> for Id {
-    fn parse<'a>(input: &'a str) -> ParseResult<'a, Id> {
+impl From<&str> for Id {
+    fn from(item: &str) -> Self {
+        Self::new(item.to_owned())
+    }
+}
+
+impl<'a> Parses<'a> for Id {
+    type Input = &'a str;
+    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         and_then(
             map(
                 map(
@@ -37,10 +48,11 @@ impl Parses<Id> for Id {
                 if Keyword::is_reserved(s.as_str()) {
                     Err(err_invalid_input(format!("{} is a reserved keyword", s)))
                 } else {
-                    Ok(Id::new(s))
+                    Ok(Self::new(s))
                 }
             },
-        ).parse(input)
+        )
+        .parse(input)
     }
 }
 
@@ -50,12 +62,11 @@ mod tests {
     use crate::parse::*;
     #[test]
     fn ids() {
-        let parser = move |input| Id::parse(input);
+        let parser = move |input| Id::parse_into(input);
 
         assert_eq!(Ok(("", Id("MyClass".to_owned()))), parser.parse("MyClass"));
         assert_eq!(Err("12345"), parser.parse("12345"));
         assert_eq!(Err("1Class"), parser.parse("1Class"));
         assert_eq!(Ok(("", Id("Class1".to_owned()))), parser.parse("Class1"));
-        
     }
 }

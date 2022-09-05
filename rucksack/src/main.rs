@@ -1,4 +1,5 @@
 #![feature(path_file_prefix)]
+#![feature(trait_alias)]
 mod asm;
 mod common;
 mod jack;
