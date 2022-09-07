@@ -377,7 +377,7 @@ mod test {
         assert_eq!(Ok(("f", Some("AD".to_owned()))), parse_peek.parse("AD=f"));
         assert_eq!(Ok(("ABCD", None)), parse_peek.parse("ABCD"));
         assert_eq!(Ok(("ABC", None)), parse_peek.parse("ABC"));
-        assert_eq!(Err("BC="), parse_peek.parse("ABC="));
+        assert_eq!(Err("ABC="), parse_peek.parse("ABC="));
     }
 
     #[test]

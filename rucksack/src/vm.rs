@@ -1,14 +1,14 @@
 use std::{
     fmt::{Debug, Display},
-    fs::{self, DirEntry},
+    fs::{self, DirEntry, File},
     io::Error,
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use crate::{
     asm::{self, ASMLine, ASMParsed, ASMUnit, Jump},
-    common::{err_invalid_input, Unit, UnitFactory},
+    common::{err_invalid_input, DirUnit, FileUnit, Unit, UnitFactory},
     parse::*,
     symbol::Symbol,
 };
@@ -24,7 +24,9 @@ impl Unit for VMUnit {
     fn src_path<'a>(&'a self) -> &'a str {
         self.src_path.as_str()
     }
+}
 
+impl FileUnit for VMUnit {
     fn parse(&self) -> Result<Self::Syntax, Error> {
         VMParsed::from_unit(self)
     }
@@ -35,7 +37,7 @@ impl VMUnit {
         ".vm"
     }
 
-    fn new(src_path: String) -> Self
+    pub fn new(src_path: String) -> Self
     where
         Self: Sized,
     {
@@ -70,7 +72,7 @@ impl<'u> VMParsed {
         return Self::parse_new(basename, source);
     }
 
-    fn new(basename: String, source: Vec<VMLine>) -> Self {
+    pub fn new(basename: String, source: Vec<VMLine>) -> Self {
         Self { basename, source }
     }
 
@@ -1020,11 +1022,11 @@ impl Debug for Bootstrapper {
 
 pub enum VMUnitType {
     File(VMUnit),
-    Dir(DirUnit),
+    Dir(VMDirUnit),
 }
 
 impl Unit for VMUnitType {
-    type Syntax = Vec<VMParsed>;
+    type Syntax = VMParsed;
 
     fn src_path<'a>(&'a self) -> &'a str {
         match self {
@@ -1032,8 +1034,14 @@ impl Unit for VMUnitType {
             VMUnitType::Dir(unit) => unit.src_path(),
         }
     }
+}
 
-    fn parse(&self) -> Result<Self::Syntax, Error> {
+impl DirUnit for VMUnitType {
+    fn filename_for(elem: &VMParsed) -> String {
+        elem.static_basename().to_owned()
+    }
+
+    fn parse(&self) -> Result<Vec<Self::Syntax>, Error> {
         match self {
             VMUnitType::File(unit) => unit.parse().map(|parsed| vec![parsed]),
             VMUnitType::Dir(unit) => unit.parse(),
@@ -1059,7 +1067,8 @@ impl VMUnitFactory {
         }
         Ok(VMUnitType::File(VMUnit::new(src_path.to_owned())))
     }
-    fn read_dir(src_path: &str) -> Result<VMUnitType, Error> {
+
+    pub fn read_dir_as_dir(src_path: &str) -> Result<VMDirUnit, Error> {
         let out_name = Path::new(src_path)
             .file_name()
             .unwrap()
@@ -1067,10 +1076,11 @@ impl VMUnitFactory {
             .into_string()
             .expect("failed to convert OsString to String");
         let out_path = format!("{src_path}/{out_name}.asm");
-        Ok(VMUnitType::Dir(DirUnit {
-            src_path: src_path.to_owned(),
-            out_path,
-        }))
+        Ok(VMDirUnit::new(src_path.to_owned(), out_path))
+    }
+
+    pub fn read_dir(src_path: &str) -> Result<VMUnitType, Error> {
+        Self::read_dir_as_dir(src_path).map(|unit| VMUnitType::Dir(unit))
     }
 }
 
@@ -1092,24 +1102,38 @@ impl UnitFactory for VMUnitFactory {
     }
 }
 
-pub struct DirUnit {
+pub struct VMDirUnit {
     src_path: String,
     out_path: String,
 }
 
-impl Unit for DirUnit {
-    type Syntax = Vec<VMParsed>;
+impl Unit for VMDirUnit {
+    type Syntax = VMParsed;
 
     fn src_path<'a>(&'a self) -> &'a str {
         &self.src_path
     }
+}
 
-    fn parse(&self) -> Result<Self::Syntax, Error> {
+impl DirUnit for VMDirUnit {
+    fn filename_for(elem: &VMParsed) -> String {
+        let mut base_path = elem.static_basename().to_owned();
+        base_path.push_str(".vm");
+        base_path
+    }
+
+    fn parse(&self) -> Result<Vec<Self::Syntax>, Error> {
         DirParser::parse_all(self)
     }
 }
 
-impl DirUnit {
+impl VMDirUnit {
+    fn new(src_path: String, out_path: String) -> Self {
+        Self {
+            src_path: src_path,
+            out_path: out_path,
+        }
+    }
     fn out_unit(&self) -> ASMUnit {
         ASMUnit::new(self.out_path.as_str().to_owned())
     }
@@ -1118,7 +1142,7 @@ impl DirUnit {
 pub struct DirParser {}
 
 impl DirParser {
-    fn parse_all(unit: &DirUnit) -> Result<Vec<VMParsed>, Error> {
+    fn parse_all(unit: &VMDirUnit) -> Result<Vec<VMParsed>, Error> {
         let children: Result<Vec<DirEntry>, Error> = fs::read_dir(unit.src_path())?.collect();
         let vm_files: Vec<String> = children?
             .iter()
@@ -1162,7 +1186,7 @@ impl<'a> Parser<'a, &'a str, Vec<VMLine>> for VMParser {
 }
 
 #[derive(Debug)]
-enum Segment {
+pub enum Segment {
     Argument,
     Local,
     Static,
@@ -1392,7 +1416,7 @@ impl Display for Command {
 }
 
 #[derive(Debug)]
-enum VMLine {
+pub enum VMLine {
     Comment(String),
     Push(Segment, i16),
     Pop(Segment, i16),

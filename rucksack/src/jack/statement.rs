@@ -1,11 +1,12 @@
 use crate::parse::*;
 
 use super::{
-    expression::{Expression, KeywordConst, Call, Term},
+    expression::{Call, Expression, KeywordConst, Term},
     id::Id,
     keyword::Keyword,
     sym::Sym,
     token::Token,
+    xmlformat::{XmlF, XmlFormattable},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -159,6 +160,96 @@ impl Statement {
         )
         .parse(input)
     }
+
+    fn xml_body_let<'a>(
+        id: &Id,
+        osub: &Box<Option<Expression>>,
+        value: &Box<Expression>,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        xmlf.write_child(f, &Keyword::Let)?;
+        xmlf.write_child(f, id)?;
+        if let Some(sub) = osub.as_ref() {
+            xmlf.write_child(f, &Sym::LSquare)?;
+            xmlf.write_child(f, sub)?;
+            xmlf.write_child(f, &Sym::RSquare)?;
+        }
+        xmlf.write_child(f, &Sym::Equals)?;
+        xmlf.write_child(f, value.as_ref())?;
+        xmlf.write_child(f, &Sym::Semi)?;
+        Ok(())
+    }
+
+    fn xml_body_if<'a>(
+        condition: &Box<Expression>,
+        body: &Box<Statements>,
+        oelze: &Box<Option<Statements>>,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        xmlf.write_child(f, &Keyword::If)?;
+        xmlf.write_child(f, &Sym::LRound)?;
+        xmlf.write_child(f, condition.as_ref())?;
+        xmlf.write_child(f, &Sym::RRound)?;
+        xmlf.write_child(f, &Sym::LCurly)?;
+        xmlf.write_child(f, body.as_ref())?;
+        xmlf.write_child(f, &Sym::RCurly)?;
+        if let Some(elze) = oelze.as_ref() {
+            xmlf.write_child(f, &Keyword::Else)?;
+            xmlf.write_child(f, &Sym::LCurly)?;
+            xmlf.write_child(f, elze)?;
+            xmlf.write_child(f, &Sym::RCurly)?;
+        }
+        Ok(())
+    }
+
+    fn xml_body_while<'a>(
+        condition: &Box<Expression>,
+        body: &Box<Statements>,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        xmlf.write_child(f, &Keyword::While)?;
+        xmlf.write_child(f, &Sym::LRound)?;
+        xmlf.write_child(f, condition.as_ref())?;
+        xmlf.write_child(f, &Sym::RRound)?;
+        xmlf.write_child(f, &Sym::LCurly)?;
+        xmlf.write_child(f, body.as_ref())?;
+        xmlf.write_child(f, &Sym::RCurly)?;
+        Ok(())
+    }
+
+    fn xml_body_do<'a>(
+        call: &Box<Call>,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        xmlf.write_child(f, &Keyword::Do)?;
+        if let Some(qual) = call.qualifier() {
+            xmlf.write_child(f, qual)?;
+            xmlf.write_child(f, &Sym::Dot)?;
+        }
+        xmlf.write_child(f, call.name())?;
+        xmlf.write_child(f, &Sym::LRound)?;
+        xmlf.write_child(f, call.expressions())?;
+        xmlf.write_child(f, &Sym::RRound)?;
+        xmlf.write_child(f, &Sym::Semi)?;
+        Ok(())
+    }
+
+    fn xml_body_return<'a>(
+        ovalue: &Box<Option<Expression>>,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        xmlf.write_child(f, &Keyword::Return)?;
+        if let Some(value) = ovalue.as_ref() {
+            xmlf.write_child(f, value)?;
+        }
+        xmlf.write_child(f, &Sym::Semi)?;
+        Ok(())
+    }
 }
 impl<'a> Parses<'a> for Statement {
     type Input = &'a [Token];
@@ -177,6 +268,33 @@ impl<'a> Parses<'a> for Statement {
             ),
         )
         .parse(input)
+    }
+}
+
+impl XmlFormattable for Statement {
+    fn xml_elem<'a>(&'a self) -> &str {
+        match self {
+            Self::Let(..) => "letStatement",
+            Self::If(..) => "ifStatement",
+            Self::While(..) => "whileStatement",
+            Self::Do(..) => "doStatement",
+            Self::Return(..) => "returnStatement",
+        }
+    }
+
+    fn write_xml_body<'a>(
+        &self,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        match self {
+            Self::Let(id, osub, value) => Self::xml_body_let(id, osub, value, xmlf, f)?,
+            Self::If(condition, stmts, elze) => Self::xml_body_if(condition, stmts, elze, xmlf, f)?,
+            Self::While(condition, stmts) => Self::xml_body_while(condition, stmts, xmlf, f)?,
+            Self::Do(call) => Self::xml_body_do(call, xmlf, f)?,
+            Self::Return(value) => Self::xml_body_return(value, xmlf, f)?,
+        }
+        Ok(())
     }
 }
 
@@ -210,11 +328,32 @@ impl From<Statement> for Statements {
         Statements::new(vec![item])
     }
 }
+
+impl XmlFormattable for Statements {
+    fn xml_elem<'a>(&'a self) -> &str {
+        "statements"
+    }
+
+    fn xml_body_type(&self) -> super::xmlformat::XmlBody {
+        super::xmlformat::XmlBody::Expanded
+    }
+
+    fn write_xml_body<'a>(
+        &self,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        for stmt in self.stmts.iter() {
+            xmlf.write_child(f, stmt)?;
+        }
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests {
     use crate::jack::{
         common::testutil::{assert_tokens, transform_result},
-        expression::{Op, Call, Term},
+        expression::{Call, Op},
         statement::Statement,
         token::IntConst,
     };

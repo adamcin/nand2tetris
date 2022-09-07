@@ -1,4 +1,4 @@
-use crate::common::{err_invalid_input, Unit, UnitFactory};
+use crate::common::{err_invalid_input, FileUnit, Unit, UnitFactory};
 use crate::parse::*;
 use crate::symbol::{Symbol, Symbols};
 use std::fmt::Debug;
@@ -513,8 +513,10 @@ impl Unit for ASMUnit {
 
     fn src_path<'a>(&'a self) -> &'a str {
         self.src_path.as_str()
-    }
+    }    
+}
 
+impl FileUnit for ASMUnit {
     fn parse(&self) -> Result<Self::Syntax, Error> {
         let source = std::fs::read_to_string(self.src_path())?;
         let parser = ASMParser {};
@@ -584,7 +586,9 @@ impl Unit for HackUnit {
     fn src_path<'a>(&'a self) -> &'a str {
         self.src_path.as_str()
     }
+}
 
+impl FileUnit for HackUnit {
     fn parse(&self) -> Result<Self::Syntax, Error> {
         let source = std::fs::read_to_string(self.src_path())?;
         let parser = Self::parser();

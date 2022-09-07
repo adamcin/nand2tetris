@@ -5,6 +5,7 @@ use super::{
     keyword::Keyword,
     sym::Sym,
     token::{IntConst, StringConst, Token},
+    xmlformat::{XmlF, XmlFormattable},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +20,36 @@ pub enum Op {
     Lt(Term),
     Gt(Term),
 }
+impl Op {
+    pub fn as_sym(&self) -> Sym {
+        match self {
+            Self::Plus(_) => Sym::Plus,
+            Self::Minus(_) => Sym::Minus,
+            Self::Splat(_) => Sym::Splat,
+            Self::Div(_) => Sym::Slash,
+            Self::And(_) => Sym::Amp,
+            Self::Or(_) => Sym::Pipe,
+            Self::Eq(_) => Sym::Equals,
+            Self::Lt(_) => Sym::LAngle,
+            Self::Gt(_) => Sym::RAngle,
+        }
+    }
+
+    pub fn term<'a>(&'a self) -> &'a Term {
+        match self {
+            Self::Plus(term) => term,
+            Self::Minus(term) => term,
+            Self::Splat(term) => term,
+            Self::Div(term) => term,
+            Self::And(term) => term,
+            Self::Or(term) => term,
+            Self::Eq(term) => term,
+            Self::Lt(term) => term,
+            Self::Gt(term) => term,
+        }
+    }
+}
+
 impl<'a> Parses<'a> for Op {
     type Input = &'a [Token];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
@@ -87,6 +118,23 @@ pub enum UnaryOp {
     Neg(Term),
     Tilde(Term),
 }
+
+impl UnaryOp {
+    fn as_sym(&self) -> Sym {
+        match self {
+            Self::Neg(_) => Sym::Minus,
+            Self::Tilde(_) => Sym::Tilde,
+        }
+    }
+
+    fn term<'a>(&'a self) -> &'a Term {
+        match self {
+            Self::Neg(term) => term,
+            Self::Tilde(term) => term,
+        }
+    }
+}
+
 impl<'a> Parses<'a> for UnaryOp {
     type Input = &'a [Token];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
@@ -270,6 +318,51 @@ impl From<Expression> for Term {
     }
 }
 
+impl XmlFormattable for Term {
+    fn xml_elem<'a>(&'a self) -> &str {
+        "term"
+    }
+
+    fn write_xml_body<'a>(
+        &self,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        match self {
+            Self::VarName(id) => xmlf.write_child(f, id)?,
+            Self::VarSub(id, expr) => {
+                xmlf.write_child(f, id)?;
+                xmlf.write_child(f, &Sym::LSquare)?;
+                xmlf.write_child(f, expr.as_ref())?;
+                xmlf.write_child(f, &Sym::RSquare)?;
+            }
+            Self::StringConst(value) => xmlf.write_child(f, value)?,
+            Self::IntConst(value) => xmlf.write_child(f, value)?,
+            Self::KeywordConst(value) => xmlf.write_child(f, &value.as_keyword())?,
+            Self::UnaryOp(op) => {
+                xmlf.write_child(f, &op.as_sym())?;
+                xmlf.write_child(f, op.term())?;
+            }
+            Self::Expr(expr) => {
+                xmlf.write_child(f, &Sym::LRound)?;
+                xmlf.write_child(f, expr.as_ref())?;
+                xmlf.write_child(f, &Sym::RRound)?;
+            }
+            Self::SubroutineCall(call) => {
+                if let Some(qual) = call.qualifier.as_ref() {
+                    xmlf.write_child(f, qual)?;
+                    xmlf.write_child(f, &Sym::Dot)?;
+                }
+                xmlf.write_child(f, &call.name)?;
+                xmlf.write_child(f, &Sym::LRound)?;
+                xmlf.write_child(f, &call.exprs)?;
+                xmlf.write_child(f, &Sym::RRound)?;
+            }
+        };
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expression {
     term: Term,
@@ -364,6 +457,25 @@ impl From<Call> for Expression {
     }
 }
 
+impl XmlFormattable for Expression {
+    fn xml_elem<'a>(&'a self) -> &str {
+        "expression"
+    }
+
+    fn write_xml_body<'a>(
+        &self,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        xmlf.write_child(f, &self.term)?;
+        for op in self.ops.iter() {
+            xmlf.write_child(f, &op.as_sym())?;
+            xmlf.write_child(f, op.term())?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionList {
     exprs: Vec<Expression>,
@@ -405,6 +517,29 @@ impl From<Expression> for ExpressionList {
     }
 }
 
+impl XmlFormattable for ExpressionList {
+    fn xml_elem<'a>(&'a self) -> &str {
+        "expressionList"
+    }
+
+    fn write_xml_body<'a>(
+        &self,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        let mut first = true;
+        for expr in self.exprs.iter() {
+            if !first {
+                xmlf.write_child(f, &Sym::Comma)?;
+            } else {
+                first = false;
+            }
+            xmlf.write_child(f, expr)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     qualifier: Option<Id>,
@@ -435,6 +570,18 @@ impl Call {
     pub fn new_qual_params(qualifier: Id, name: Id, exprs: ExpressionList) -> Self {
         Self::new(Some(qualifier), name, exprs)
     }
+
+    pub fn qualifier<'a>(&'a self) -> Option<&'a Id> {
+        self.qualifier.as_ref()
+    }
+
+    pub fn name<'a>(&'a self) -> &'a Id {
+        &self.name
+    }
+
+    pub fn expressions<'a>(&'a self) -> &'a ExpressionList {
+        &self.exprs
+    }
 }
 
 impl<'a> Parses<'a> for Call {
@@ -463,6 +610,16 @@ pub enum KeywordConst {
     False,
     Null,
     This,
+}
+impl KeywordConst {
+    fn as_keyword(&self) -> Keyword {
+        match self {
+            Self::True => Keyword::True,
+            Self::False => Keyword::False,
+            Self::Null => Keyword::Null,
+            Self::This => Keyword::This,
+        }
+    }
 }
 impl<'a> Parses<'a> for KeywordConst {
     type Input = &'a [Token];

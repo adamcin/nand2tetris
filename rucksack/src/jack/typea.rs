@@ -1,6 +1,8 @@
+use std::fmt::Display;
+
 use crate::parse::*;
 
-use super::{id::Id, keyword::Keyword, token::Token};
+use super::{id::Id, keyword::Keyword, token::Token, xmlformat::XmlFormattable};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
@@ -25,9 +27,45 @@ impl<'a> Parses<'a> for Type {
         .parse(input)
     }
 }
+
 impl From<Id> for Type {
     fn from(item: Id) -> Self {
         Self::ClassName(item)
+    }
+}
+
+impl XmlFormattable for Type {
+    fn xml_body_type(&self) -> super::xmlformat::XmlBody {
+        super::xmlformat::XmlBody::Inline
+    }
+
+    fn xml_inline_body(&self) -> String {
+        match self {
+            Self::Int => Keyword::Int.xml_inline_body(),
+            Self::Char => Keyword::Char.xml_inline_body(),
+            Self::Boolean => Keyword::Boolean.xml_inline_body(),
+            Self::ClassName(value) => value.xml_inline_body(),
+        }
+    }
+
+    fn xml_elem<'a>(&'a self) -> &str {
+        match self {
+            Self::Int => Keyword::Int.xml_elem(),
+            Self::Char => Keyword::Char.xml_elem(),
+            Self::Boolean => Keyword::Boolean.xml_elem(),
+            Self::ClassName(value) => value.xml_elem(),
+        }
+    }
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Int => write!(f, "{}", Keyword::Int),
+            Self::Char => write!(f, "{}", Keyword::Char),
+            Self::Boolean => write!(f, "{}", Keyword::Boolean),
+            Self::ClassName(value) => write!(f, "{}", value),
+        }
     }
 }
 

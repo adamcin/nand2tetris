@@ -1,18 +1,30 @@
+use std::fmt::Display;
+
 use crate::parse::*;
 
-use super::common::XmlFormattable;
 use super::id::Id;
 use super::keyword::Keyword;
 use super::subroutine::*;
 use super::sym::Sym;
 use super::token::Token;
 use super::typea::Type;
+use super::xmlformat::{XmlBody, XmlF, XmlFormattable};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClassVarKind {
     Static,
     Field,
 }
+
+impl ClassVarKind {
+    pub fn as_keyword(&self) -> Keyword {
+        match self {
+            Self::Static => Keyword::Static,
+            Self::Field => Keyword::Field,
+        }
+    }
+}
+
 impl<'a> Parses<'a> for ClassVarKind {
     type Input = &'a [Token];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
@@ -23,18 +35,32 @@ impl<'a> Parses<'a> for ClassVarKind {
         .parse(input)
     }
 }
+impl XmlFormattable for ClassVarKind {
+    fn xml_elem<'a>(&'a self) -> &str {
+        "keyword"
+    }
 
+    fn xml_body_type(&self) -> XmlBody {
+        XmlBody::Inline
+    }
+
+    fn xml_inline_body(&self) -> String {
+        self.as_keyword().xml_inline_body()
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassVarDec {
     var_kind: ClassVarKind,
     var_type: Type,
+    var_name: Id,
     var_names: Vec<Id>,
 }
 impl ClassVarDec {
-    pub fn new(var_kind: ClassVarKind, var_type: Type, var_names: Vec<Id>) -> Self {
+    pub fn new(var_kind: ClassVarKind, var_type: Type, var_name: Id, var_names: Vec<Id>) -> Self {
         Self {
             var_kind,
             var_type,
+            var_name,
             var_names,
         }
     }
@@ -47,24 +73,44 @@ impl<'a> Parses<'a> for ClassVarDec {
                 move |input| ClassVarKind::parse_into(input),
                 pair(
                     move |input| Type::parse_into(input),
-                    map(
-                        pair(
-                            move |input| Token::id(input),
-                            left(
-                                range(right(Sym::Comma, move |input| Token::id(input)), 0..),
-                                Sym::Semi,
-                            ),
+                    pair(
+                        move |input| Token::id(input),
+                        left(
+                            range(right(Sym::Comma, move |input| Token::id(input)), 0..),
+                            Sym::Semi,
                         ),
-                        |(id, ids)| -> Vec<Id> { vec![vec![id], ids].concat() },
                     ),
                 ),
             ),
-            |(var_kind, (var_type, var_names))| Self::new(var_kind, var_type, var_names),
+            |(var_kind, (var_type, (var_name, var_names)))| {
+                Self::new(var_kind, var_type, var_name, var_names)
+            },
         )
         .parse(input)
     }
 }
 
+impl XmlFormattable for ClassVarDec {
+    fn xml_elem<'a>(&'a self) -> &str {
+        "classVarDec"
+    }
+
+    fn write_xml_body<'a>(
+        &self,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        xmlf.write_child(f, &self.var_kind)?;
+        xmlf.write_child(f, &self.var_type)?;
+        xmlf.write_child(f, &self.var_name)?;
+        for name in self.var_names.iter() {
+            xmlf.write_child(f, &Sym::Comma)?;
+            xmlf.write_child(f, name)?;
+        }
+        xmlf.write_child(f, &Sym::Semi)?;
+        Ok(())
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Class {
     name: Id,
@@ -73,8 +119,12 @@ pub struct Class {
 }
 
 impl Class {
-    fn new(name: Id, vars: Vec<ClassVarDec>, subs: Vec<SubroutineDec>) -> Self {
+    pub fn new(name: Id, vars: Vec<ClassVarDec>, subs: Vec<SubroutineDec>) -> Self {
         Self { name, vars, subs }
+    }
+
+    pub fn name<'a>(&'a self) -> &'a str {
+        self.name.as_str()
     }
 }
 impl<'a> Parses<'a> for Class {
@@ -103,12 +153,42 @@ impl<'a> Parses<'a> for Class {
     }
 }
 
+impl XmlFormattable for Class {
+    fn xml_elem<'a>(&'a self) -> &str {
+        "class"
+    }
+
+    fn write_xml_body<'a>(
+        &self,
+        xmlf: &XmlF<'a, Self>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        xmlf.write_child(f, &Keyword::Class)?;
+        xmlf.write_child(f, &self.name)?;
+        xmlf.write_child(f, &Sym::LCurly)?;
+        for var in self.vars.iter() {
+            xmlf.write_child(f, var)?;
+        }
+        for dec in self.subs.iter() {
+            xmlf.write_child(f, dec)?;
+        }
+        xmlf.write_child(f, &Sym::RCurly)?;
+        Ok(())
+    }
+}
+impl Display for Class {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {} {}", &Keyword::Class, self.name, &Sym::LCurly)?;
+        write!(f, "{}", &Sym::RCurly)?;
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::jack::{
         common::testutil::{assert_tokens, transform_result},
-        expression::{Op, Call},
+        expression::{Call, Op},
         statement::Statement,
         token::{IntConst, StringConst},
     };
@@ -151,7 +231,8 @@ mod tests {
                     vec![ClassVarDec::new(
                         ClassVarKind::Static,
                         Type::Int,
-                        vec!["count".into()],
+                        "count".into(),
+                        Vec::new(),
                     )],
                     Vec::new(),
                 )),
@@ -224,35 +305,34 @@ mod tests {
                                     (Id::from("i").into(), Op::Lt(Id::from("length").into()))
                                         .into(),
                                     vec![
-                                            Statement::new_let_var_sub(
-                                                Id::from("a"),
-                                                Id::from("i").into(),
-                                                Call::new_qual_params(
-                                                    Id::from("Keyboard"),
-                                                    Id::from("readInt"),
-                                                    vec![StringConst::from("How many numbers? ")
-                                                        .into()]
+                                        Statement::new_let_var_sub(
+                                            Id::from("a"),
+                                            Id::from("i").into(),
+                                            Call::new_qual_params(
+                                                Id::from("Keyboard"),
+                                                Id::from("readInt"),
+                                                vec![StringConst::from("Enter a number: ").into()]
                                                     .into(),
-                                                )
+                                            )
+                                            .into(),
+                                        ),
+                                        Statement::new_let_var(
+                                            Id::from("sum"),
+                                            (
+                                                Id::from("sum").into(),
+                                                Op::Plus((Id::from("a"), Id::from("i")).into()),
+                                            )
                                                 .into(),
-                                            ),
-                                            Statement::new_let_var(
-                                                Id::from("sum"),
-                                                (
-                                                    Id::from("sum").into(),
-                                                    Op::Plus((Id::from("a"), Id::from("i")).into()),
-                                                )
-                                                    .into(),
-                                            ),
-                                            Statement::new_let_var(
-                                                Id::from("i"),
-                                                (
-                                                    Id::from("i").into(),
-                                                    Op::Plus(IntConst::one().into()),
-                                                )
-                                                    .into(),
-                                            ),
-                                        ]
+                                        ),
+                                        Statement::new_let_var(
+                                            Id::from("i"),
+                                            (
+                                                Id::from("i").into(),
+                                                Op::Plus(IntConst::one().into()),
+                                            )
+                                                .into(),
+                                        ),
+                                    ]
                                     .into(),
                                 ),
                                 Statement::new_do(Call::new_qual_params(

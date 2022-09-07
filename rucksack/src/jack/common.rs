@@ -1,77 +1,6 @@
-use std::fmt::Display;
-
-pub enum XmlBody {
-    Inline,
-    Expanded,
-}
-
-pub trait XmlFormattable {
-    fn xml_elem<'a>(&'a self) -> &str;
-    fn xml_body_type(&self) -> XmlBody {
-        XmlBody::Inline
-    }
-    fn xml_inline_body(&self) -> String {
-        "".to_owned()
-    }
-    fn write_xml_body(
-        &self,
-        _next_indent: usize,
-        _indent_inc: usize,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        match self.xml_body_type() {
-            XmlBody::Inline => write!(f, " {} ", self.xml_inline_body()),
-            XmlBody::Expanded => write!(f, " {} ", self.xml_inline_body()),
-        }
-    }
-}
-
-pub struct XmlFormatter<'a, T: XmlFormattable> {
-    indent: usize,
-    indent_inc: usize,
-    syntax: &'a T,
-}
-
-impl<'a, T> XmlFormatter<'a, T>
-where
-    T: XmlFormattable,
-{
-    pub fn new(syntax: &'a T, indent: usize, indent_inc: usize) -> Self {
-        Self {
-            indent,
-            indent_inc,
-            syntax,
-        }
-    }
-}
-
-impl<'a, T> Display for XmlFormatter<'a, T>
-where
-    T: XmlFormattable,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let indent_str = format!("{0:indent$}", "", indent = self.indent);
-        write!(f, "{indent_str}<{}>", self.syntax.xml_elem())?;
-        match self.syntax.xml_body_type() {
-            XmlBody::Inline => {
-                self.syntax
-                    .write_xml_body(self.indent + self.indent_inc, self.indent_inc, f)?;
-            }
-            XmlBody::Expanded => {
-                writeln!(f, "")?;
-                self.syntax
-                    .write_xml_body(self.indent + self.indent_inc, self.indent_inc, f)?;
-                write!(f, "{indent_str}")?
-            }
-        }
-        writeln!(f, "</{}>", self.syntax.xml_elem())?;
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod testutil {
-    use std::fmt::Debug;
+    use std::{fmt::Debug, fs::read_to_string, path::Path};
 
     use crate::{jack::token::*, parse::*};
 
@@ -100,5 +29,21 @@ pub(crate) mod testutil {
             let result = pf(stream.tokens());
             assert_eq!(expected, result);
         });
+    }
+
+    pub fn read_test_file<P>(path: P) -> String
+    where
+        P: AsRef<Path> + Debug,
+    {
+        read_to_string(&path).expect(
+            format!(
+                "read_test_file failed to read path {:?} from current directory {}",
+                &path,
+                std::path::absolute(".")
+                    .expect("failed to get absolute path of current directory")
+                    .display(),
+            )
+            .as_str(),
+        )
     }
 }

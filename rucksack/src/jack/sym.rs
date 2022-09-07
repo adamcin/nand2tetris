@@ -1,6 +1,8 @@
+use std::fmt::Display;
+
 use crate::parse::*;
 
-use super::token::Token;
+use super::{token::Token, xmlformat::XmlFormattable};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sym {
@@ -96,6 +98,31 @@ impl<'a> Parses<'a> for Sym {
                 ))
             })
             .parse(input)
+    }
+}
+
+impl XmlFormattable for Sym {
+    fn xml_body_type(&self) -> super::xmlformat::XmlBody {
+        super::xmlformat::XmlBody::Inline
+    }
+    
+    fn xml_elem<'a>(&'a self) -> &str {
+        "symbol"
+    }
+
+    fn xml_inline_body(&self) -> String {
+        match self {
+            Self::Amp => "&amp;".to_owned(),
+            Self::LAngle => "&lt;".to_owned(),
+            Self::RAngle => "&gt;".to_owned(),
+            _ => self.as_str().to_owned(),
+        }
+    }
+}
+
+impl Display for Sym {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 

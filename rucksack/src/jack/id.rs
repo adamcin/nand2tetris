@@ -1,7 +1,10 @@
+use std::fmt::Display;
+
 use crate::common::err_invalid_input;
 use crate::parse::*;
 
 use super::keyword::Keyword;
+use super::xmlformat::XmlFormattable;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Id(String);
@@ -58,6 +61,25 @@ impl<'a> Parses<'a> for Id {
     }
 }
 
+impl XmlFormattable for Id {
+    fn xml_body_type(&self) -> super::xmlformat::XmlBody {
+        super::xmlformat::XmlBody::Inline
+    }
+    
+    fn xml_elem<'a>(&'a self) -> &str {
+        "identifier"
+    }
+
+    fn xml_inline_body(&self) -> String {
+        (self.0).to_owned()
+    }
+}
+
+impl Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
