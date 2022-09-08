@@ -96,7 +96,7 @@ impl JackDirParser {
         let jack_files: Vec<String> = children?
             .iter()
             .filter_map(|child| child.path().to_str().map(|p| String::from(p)))
-            .filter(|name| name.ends_with(".vm"))
+            .filter(|name| name.ends_with(".jack"))
             .collect();
         let units: Result<Vec<JackUnitType>, Error> = jack_files
             .iter()
@@ -153,7 +153,7 @@ pub struct JackUnitFactory {}
 
 impl JackUnitFactory {
     fn read_jack(src_path: &str) -> Result<JackUnitType, Error> {
-        if !src_path.ends_with(".vm") {
+        if !src_path.ends_with(".jack") {
             return Err(err_invalid_input(format!("Invalid filename: {}", src_path)));
         }
         Ok(JackUnitType::FileUnit(JackFileUnit::new(
@@ -229,6 +229,10 @@ mod test {
             "data/11/Square",
         ];
 
-        assert!(JackAnalyzer::do_main(dirs.iter().map(|&item| item).collect()).is_ok());
+        let result = JackAnalyzer::do_main(dirs.iter().map(|&item| item).collect());
+        if let Err(error) = &result {
+            println!("analyze_11 error: {:?}", error);
+        }
+        assert!(&result.is_ok());
     }
 }

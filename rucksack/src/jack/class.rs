@@ -10,7 +10,7 @@ use super::token::Token;
 use super::typea::Type;
 use super::xmlformat::{XmlBody, XmlF, XmlFormattable};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassVarKind {
     Static,
     Field,
@@ -64,7 +64,20 @@ impl ClassVarDec {
             var_names,
         }
     }
+
+    pub fn var_kind<'a>(&'a self) -> &'a ClassVarKind {
+        &self.var_kind
+    }
+
+    pub fn var_type<'a>(&'a self) -> &'a Type {
+        &self.var_type
+    }
+
+    pub fn var_names<'a>(&'a self) -> Vec<&'a Id> {
+        vec![vec![&self.var_name], self.var_names.iter().collect()].concat()
+    }
 }
+
 impl<'a> Parses<'a> for ClassVarDec {
     type Input = &'a [Token];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
@@ -125,6 +138,14 @@ impl Class {
 
     pub fn name<'a>(&'a self) -> &'a str {
         self.name.as_str()
+    }
+
+    pub fn vars<'a>(&'a self) -> &'a [ClassVarDec] {
+        self.vars.as_slice()
+    }
+
+    pub fn subs<'a>(&'a self) -> &'a [SubroutineDec] {
+        self.subs.as_slice()
     }
 }
 impl<'a> Parses<'a> for Class {

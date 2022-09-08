@@ -11,6 +11,16 @@ pub enum Type {
     Boolean,
     ClassName(Id),
 }
+impl Type {
+    pub fn copy(&self) -> Self {
+        match self {
+            Self::Int => Self::Int,
+            Self::Char => Self::Char,
+            Self::Boolean => Self::Boolean,
+            Self::ClassName(id) => Self::ClassName(id.copy()),
+        }
+    }
+}
 impl<'a> Parses<'a> for Type {
     type Input = &'a [Token];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {

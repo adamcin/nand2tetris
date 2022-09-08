@@ -2,7 +2,10 @@
 pub(crate) mod testutil {
     use std::{fmt::Debug, fs::read_to_string, path::Path};
 
-    use crate::{jack::token::*, parse::*};
+    use crate::{
+        jack::{class::Class, token::*},
+        parse::*,
+    };
 
     pub trait TokenResultFn<R> = Fn(&[Token]) -> Result<R, Option<Token>>;
 
@@ -45,5 +48,15 @@ pub(crate) mod testutil {
             )
             .as_str(),
         )
+    }
+
+    pub fn read_class<P>(jack_file: P) -> Result<Class, String>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        let source = read_test_file(jack_file).trim().to_owned();
+        let (_, stream) = TokenStream::parse_into(source.as_str()).map_err(|err| err.to_owned())?;
+        let (_, class) = Class::parse_into(stream.tokens()).map_err(|err| format!("{:?}", err))?;
+        Ok(class)
     }
 }

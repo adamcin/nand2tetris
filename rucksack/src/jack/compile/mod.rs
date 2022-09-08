@@ -1,8 +1,17 @@
-use std::io::Error;
+mod vartable;
+
+use std::{collections::HashMap, io::Error};
 
 use crate::vm::VMParsed;
 
-use super::class::Class;
+use super::{
+    class::{Class, ClassVarKind},
+    id::Id,
+    keyword::Keyword,
+    typea::Type,
+};
+
+pub type CompileError = String;
 
 pub struct JackCompiler {}
 

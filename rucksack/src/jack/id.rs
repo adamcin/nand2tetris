@@ -6,7 +6,7 @@ use crate::parse::*;
 use super::keyword::Keyword;
 use super::xmlformat::XmlFormattable;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Id(String);
 
 impl Id {
@@ -26,7 +26,9 @@ impl Id {
         Self::is_ident_lead(c) || c.is_ascii_digit()
     }
 
-    pub fn as_str<'a>(&'a self) -> &'a str { &self.0 }
+    pub fn as_str<'a>(&'a self) -> &'a str {
+        &self.0
+    }
 }
 
 impl From<&str> for Id {
@@ -65,7 +67,7 @@ impl XmlFormattable for Id {
     fn xml_body_type(&self) -> super::xmlformat::XmlBody {
         super::xmlformat::XmlBody::Inline
     }
-    
+
     fn xml_elem<'a>(&'a self) -> &str {
         "identifier"
     }

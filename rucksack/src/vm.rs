@@ -1038,7 +1038,7 @@ impl Unit for VMUnitType {
 
 impl DirUnit for VMUnitType {
     fn filename_for(elem: &VMParsed) -> String {
-        elem.static_basename().to_owned()
+        format!("{}.vm", elem.static_basename())
     }
 
     fn parse(&self) -> Result<Vec<Self::Syntax>, Error> {

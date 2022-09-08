@@ -1,3 +1,5 @@
+use std::slice::Iter;
+
 use crate::parse::*;
 
 use super::id::Id;
@@ -114,6 +116,14 @@ impl SubroutineParameter {
     pub fn new(var_type: Type, var_name: Id) -> Self {
         Self { var_type, var_name }
     }
+
+    pub fn var_type<'a>(&'a self) -> &'a Type {
+        &self.var_type
+    }
+
+    pub fn var_name<'a>(&'a self) -> &'a Id {
+        &self.var_name
+    }
 }
 impl<'a> Parses<'a> for SubroutineParameter {
     type Input = &'a [Token];
@@ -143,6 +153,10 @@ pub struct ParameterList {
 impl ParameterList {
     pub fn new(vars: Vec<SubroutineParameter>) -> Self {
         Self { vars }
+    }
+
+    pub fn vars<'a>(&'a self) -> &'a [SubroutineParameter] {
+        &self.vars
     }
 }
 impl<'a> Parses<'a> for ParameterList {
@@ -217,6 +231,14 @@ impl XmlFormattable for ParameterList {
     }
 }
 
+impl<'a> IntoIterator for &'a ParameterList {
+    type Item = &'a SubroutineParameter;
+    type IntoIter = Iter<'a, SubroutineParameter>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.vars.iter()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VarDec {
     var_type: Type,
@@ -230,6 +252,14 @@ impl VarDec {
             var_name,
             var_names,
         }
+    }
+
+    pub fn var_type<'a>(&'a self) -> &'a Type {
+        &self.var_type
+    }
+
+    pub fn var_names<'a>(&'a self) -> Vec<&'a Id> {
+        vec![vec![&self.var_name], self.var_names.iter().collect()].concat()
     }
 }
 impl<'a> Parses<'a> for VarDec {
@@ -307,7 +337,7 @@ impl XmlFormattable for VarDec {
         xmlf.write_child(f, &self.var_name)?;
         for var_name in self.var_names.iter() {
             xmlf.write_child(f, &Sym::Comma)?;
-            xmlf.write_child(f, var_name)?;    
+            xmlf.write_child(f, var_name)?;
         }
         xmlf.write_child(f, &Sym::Semi)?;
         Ok(())
@@ -325,6 +355,10 @@ impl SubroutineBody {
             var_decs,
             statements,
         }
+    }
+
+    pub fn vars<'a>(&'a self) -> &'a [VarDec] {
+        &self.var_decs
     }
 }
 impl<'a> Parses<'a> for SubroutineBody {
@@ -407,7 +441,20 @@ impl SubroutineDec {
             body,
         }
     }
+
+    pub fn kind<'a>(&'a self) -> &'a SubroutineKind {
+        &self.kind
+    }
+
+    pub fn params<'a>(&'a self) -> &'a ParameterList {
+        &self.params
+    }
+
+    pub fn body<'a>(&'a self) -> &'a SubroutineBody {
+        &self.body
+    }
 }
+
 impl<'a> Parses<'a> for SubroutineDec {
     type Input = &'a [Token];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
